@@ -11,7 +11,8 @@ import shutil
 
 ROOT = Path(__file__).resolve().parent
 OUT = ROOT / '_site'
-POST = json.loads((ROOT / 'ring.json').read_text())
+POST_DIR = ROOT / 'content' / 'posts' / '64003052404-the-humanitarian-ring'
+POST = json.loads((POST_DIR / 'post.json').read_text())
 assert POST['kind'] == 'legacy-test'
 assert POST['id'] == '64003052404'
 assert POST['date'] == '2013-10-14'
@@ -37,8 +38,8 @@ def build():
     article_dir.mkdir(parents=True)
     for name in POST['images']:
         assert Path(name).name == name
-        shutil.copyfile(ROOT / name, OUT / name)
-        shutil.copyfile(ROOT / name, article_dir / name)
+        shutil.copyfile(POST_DIR / 'images' / name, OUT / name)
+        shutil.copyfile(POST_DIR / 'images' / name, article_dir / name)
     page = f'''<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="robots" content="noindex,nofollow"><title>{html.escape(POST['title'])} | VerityThink test</title><style>{CSS}</style></head><body>
 <div class="test">Isolated migration test · Not the live blog</div><div class="wrap"><header class="masthead"><a class="name" href="#">VerityThink</a><p class="tagline">Humanitarian ideas. Technology. Possibility.</p></header><div class="edition"><span>The archive / No. {POST['id']}</span><span>Original edition · 14 October 2013</span></div>
 <main><article><div class="kicker">From the archive · Technology</div><h1>{html.escape(POST['title'])}</h1><div class="byline">Andrej Verity &nbsp; / &nbsp; <time datetime="{POST['date']}">14 October 2013</time></div><div class="body">{POST['html']}</div><aside class="note">Migration test: this is an archival article, not a new post. Original wording, links, date and both images are retained. Email subscription text above is historical only. No subscription form, RSS feed or email distribution is active. <a href="{POST['original_url']}">Read the original post</a>.</aside></article></main>
