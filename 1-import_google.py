@@ -1,7 +1,8 @@
-"""Read the approved Ring-only pilot from private Google sources.
+"""Read the approved Ring pilot and the gated vt-0001 test post from private Google sources.
 
 No source identifiers or OAuth tokens are printed or placed in the site.
-Only the already-approved archival article can be built by this pilot.
+Only the already-approved archival article and the explicitly gated labelled
+test post can be built by this pilot.
 """
 import base64
 import hashlib
@@ -21,6 +22,12 @@ POST_ID = '64003052404'
 POST_FOLDER = '2013-10-14-the-humanitarian-ring'
 EXPORT = ROOT / 'content' / 'posts' / POST_FOLDER
 ORIGINAL = 'https://blog.veritythink.com/post/64003052404/the-humanitarian-ring'
+TEST_ID = 'vt-0001'
+TEST_FOLDER = '2026-11-22-pilot-test-post'
+TEST_EXPORT = ROOT / 'content' / 'posts' / TEST_FOLDER
+TEST_TITLE = 'Publishing test, not a real article'
+TEST_SLUG = 'pilot-test-post'
+TEST_DATE = '2026-11-22'
 STAGE = 'configuration'
 
 class Node:
@@ -81,17 +88,26 @@ def output_publish(value):
         with open(target, 'a') as f:
             f.write('publish=' + ('true' if value else 'false') + '\n')
 
-def sanitize(source):
+def ring_headers(parts):
+    if len(parts) < 4 or parts[0].text().strip() != 'The Humanitarian Ring':
+        raise RuntimeError('Pilot header changed; manual review required')
+    if not parts[1].text().startswith('Original post: 14 Oct 2013') or parts[2].text().strip() != 'Original blog post':
+        raise RuntimeError('Pilot metadata boundary changed; manual review required')
+    return 3
+
+def test_headers(parts):
+    if len(parts) < 2 or parts[0].text().strip() != TEST_TITLE:
+        raise RuntimeError('Test-post title changed; manual review required')
+    return 1
+
+def sanitize(source, check_headers, image_prefix, expected_images):
     tree = Tree()
     tree.feed(source)
     if tree.body is None:
         raise RuntimeError('Missing article body')
     parts = [c for c in tree.body.children if isinstance(c, Node)]
-    if len(parts) < 4 or parts[0].text().strip() != 'The Humanitarian Ring':
-        raise RuntimeError('Pilot header changed; manual review required')
-    if not parts[1].text().startswith('Original post: 14 Oct 2013') or parts[2].text().strip() != 'Original blog post':
-        raise RuntimeError('Pilot metadata boundary changed; manual review required')
-    for n in parts[:3]:
+    stripped = check_headers(parts)
+    for n in parts[:stripped]:
         tree.body.children.remove(n)
     images = []
     allowed = {'p', 'a', 'img', 'strong', 'em', 'b', 'i', 'br', 'ul', 'ol', 'li', 'h2', 'h3', 'blockquote'}
@@ -108,9 +124,9 @@ def sanitize(source):
             raw = base64.b64decode(m.group(1), validate=False)
             if not raw.startswith(b'\x89PNG\r\n\x1a\n') or len(raw) > 5_000_000:
                 raise RuntimeError('Invalid pilot image')
-            name = 'ring-' + str(len(images)+1) + '.png'
+            name = image_prefix + str(len(images)+1) + '.png'
             images.append((name, raw))
-            return '<img src="' + name + '" alt="Original Humanitarian Ring illustration ' + str(len(images)) + '" loading="lazy"/>'
+            return ' '
         inner = ''.join(render(c) for c in n.children)
         if n.tag == 'p' and not n.text().strip() and not n.contains_image():
             return ''
@@ -125,16 +141,28 @@ def sanitize(source):
                 return inner
             if parsed.hostname and (parsed.hostname.endswith('google.com') or parsed.hostname.endswith('googleusercontent.com')):
                 raise RuntimeError('Private Google link requires manual review')
-            return '<a href="' + html.escape(href, quote=True) + '">' + inner + '</a>'
+            return ' ' + inner + ' '
         if n.tag == 'br':
-            return '<br/>'
+            return ' '
         return '<' + n.tag + '>' + inner + '</' + n.tag + '>'
     body = ''.join(render(c) for c in tree.body.children)
-    if len(images) != 2:
-        raise RuntimeError('Pilot requires exactly two original illustrations')
+    if len(images) != expected_images:
+        raise RuntimeError('Unexpected pilot image count; manual review required')
     if 'docs.google.com' in body or 'data:image' in body:
         raise RuntimeError('Unsafe source reference refused')
     return body, images
+
+def validate_post_folder(cfg, token, doc_meta, folder_name):
+    parents = doc_meta.get('parents', [])
+    if len(parents) != 1:
+        raise RuntimeError('Source is outside the approved folder')
+    post_folder = json.loads(api('https://www.googleapis.com/drive/v3/files/' + parents[0] + '?fields=name,parents,mimeType,trashed', token))
+    ancestors = post_folder.get('parents', [])
+    if post_folder.get('trashed') or post_folder.get('name') != folder_name or post_folder.get('mimeType') != 'application/vnd.google-apps.folder' or len(ancestors) != 1:
+        raise RuntimeError('Unexpected post folder; manual review required')
+    posts_folder = json.loads(api('https://www.googleapis.com/drive/v3/files/' + ancestors[0] + '?fields=name,parents,mimeType,trashed', token))
+    if posts_folder.get('trashed') or posts_folder.get('name') != 'Posts' or posts_folder.get('mimeType') != 'application/vnd.google-apps.folder' or cfg['folder_id'] not in posts_folder.get('parents', []):
+        raise RuntimeError('Post folder is outside the approved publishing path')
 
 def main():
     global STAGE
@@ -152,15 +180,9 @@ def main():
             raise RuntimeError('Source is not an active file inside the approved folder')
         parents = meta.get('parents', [])
         if cfg['folder_id'] not in parents:
-            if key != 'document_id' or len(parents) != 1:
+            if key != 'document_id':
                 raise RuntimeError('Source is outside the approved folder')
-            post_folder = json.loads(api('https://www.googleapis.com/drive/v3/files/' + parents[0] + '?fields=name,parents,mimeType,trashed', token))
-            ancestors = post_folder.get('parents', [])
-            if post_folder.get('trashed') or post_folder.get('name') != POST_FOLDER or post_folder.get('mimeType') != 'application/vnd.google-apps.folder' or len(ancestors) != 1:
-                raise RuntimeError('Unexpected post folder; manual review required')
-            posts_folder = json.loads(api('https://www.googleapis.com/drive/v3/files/' + ancestors[0] + '?fields=name,parents,mimeType,trashed', token))
-            if posts_folder.get('trashed') or posts_folder.get('name') != 'Posts' or posts_folder.get('mimeType') != 'application/vnd.google-apps.folder' or cfg['folder_id'] not in posts_folder.get('parents', []):
-                raise RuntimeError('Post folder is outside the approved publishing path')
+            validate_post_folder(cfg, token, meta, POST_FOLDER)
         if key == 'document_id':
             version = str(meta.get('version', ''))
     STAGE = 'spreadsheet read'
@@ -170,28 +192,72 @@ def main():
     if len(matches) != 1:
         raise RuntimeError('Expected exactly one approved archival row')
     row = matches[0]
-    if row[5] != 'Publish test':
-        output_publish(False)
+    ring_publish = row[5] == 'Publish test'
+    if ring_publish:
+        source_match = re.search(r'/document/d/([A-Za-z0-9_-]+)', row[3])
+        if row[0] != ORIGINAL or row[2] != '2013-10-14' or not source_match or source_match.group(1) != cfg['document_id']:
+            raise RuntimeError('Archival identity, date or source changed; manual review required')
+        STAGE = 'document export'
+        raw = api('https://www.googleapis.com/drive/v3/files/' + cfg['document_id'] + '/export?mimeType=text%2Fhtml', token)
+        STAGE = 'article sanitization'
+        body, images = sanitize(raw.decode('utf-8'), ring_headers, 'ring-', 2)
+        (EXPORT / 'images').mkdir(parents=True, exist_ok=True)
+        for name, data in images:
+            (EXPORT / 'images' / name).write_bytes(data)
+            (ROOT / name).write_bytes(data) # Ephemeral compatibility input, never committed
+        post = dict(id=POST_ID, slug='the-humanitarian-ring', title='The Humanitarian Ring', date='2013-10-14', original_url=ORIGINAL, kind='legacy-test', html=body, images=[n for n, _ in images])
+        (EXPORT / 'post.json').write_text(json.dumps(post, ensure_ascii=False, indent=2))
+        (ROOT / 'ring.json').write_text(json.dumps(post, ensure_ascii=False, indent=2)) # Ephemeral compatibility input
+        proof = {'source_mode': 'private-google-readonly', 'source_version': version, 'source_sha256': hashlib.sha256(raw).hexdigest(), 'imported_at_utc': __import__('datetime').datetime.now(__import__('datetime').timezone.utc).isoformat()}
+        (ROOT / 'source-proof.json').write_text(json.dumps(proof))
+        print('PASS: private Sheet and Doc read with short-lived credentials; one approved archival article and two embedded images imported. No source IDs exported.')
+    else:
         print('PAUSED: the archival row is not set to Publish test. Existing preview remains unchanged.')
-        return
-    source_match = re.search(r'/document/d/([A-Za-z0-9_-]+)', row[3])
-    if row[0] != ORIGINAL or row[2] != '2013-10-14' or not source_match or source_match.group(1) != cfg['document_id']:
-        raise RuntimeError('Archival identity, date or source changed; manual review required')
-    STAGE = 'document export'
-    raw = api('https://www.googleapis.com/drive/v3/files/' + cfg['document_id'] + '/export?mimeType=text%2Fhtml', token)
-    STAGE = 'article sanitization'
-    body, images = sanitize(raw.decode('utf-8'))
-    (EXPORT / 'images').mkdir(parents=True, exist_ok=True)
-    for name, data in images:
-        (EXPORT / 'images' / name).write_bytes(data)
-        (ROOT / name).write_bytes(data) # Ephemeral compatibility input, never committed
-    post = dict(id=POST_ID, slug='the-humanitarian-ring', title='The Humanitarian Ring', date='2013-10-14', original_url=ORIGINAL, kind='legacy-test', html=body, images=[n for n, _ in images])
-    (EXPORT / 'post.json').write_text(json.dumps(post, ensure_ascii=False, indent=2))
-    (ROOT / 'ring.json').write_text(json.dumps(post, ensure_ascii=False, indent=2)) # Ephemeral compatibility input
-    proof = {'source_mode': 'private-google-readonly', 'source_version': version, 'source_sha256': hashlib.sha256(raw).hexdigest(), 'imported_at_utc': __import__('datetime').datetime.now(__import__('datetime').timezone.utc).isoformat()}
-    (ROOT / 'source-proof.json').write_text(json.dumps(proof))
-    output_publish(True)
-    print('PASS: private Sheet and Doc read with short-lived credentials; one approved archival article and two embedded images imported. No source IDs exported.')
+    STAGE = 'new-post registry read'
+    test_publish = import_test_post(cfg, token)
+    output_publish(ring_publish or test_publish)
+
+def import_test_post(cfg, token):
+    global STAGE
+    ranges = urllib.parse.quote("'New posts'!A1:K50", safe='')
+    rows = json.loads(api('https://sheets.googleapis.com/v4/spreadsheets/' + cfg['spreadsheet_id'] + '/values/' + ranges, token)).get('values', [])
+    matches = [r for r in rows[1:] if len(r) > 0 and str(r[0]) == TEST_ID]
+    if len(matches) != 1:
+        raise RuntimeError('Expected exactly one vt-0001 registry row')
+    row = list(matches[0]) + [''] * 11
+    if row[9] != 'Not eligible':
+        raise RuntimeError('Test post RSS/email eligibility changed; manual review required')
+    if row[4] != 'Publish test':
+        print('SKIP: the vt-0001 test post is not set to Publish test. Existing preview remains unchanged.')
+        return False
+    if row[1].strip() != TEST_TITLE:
+        raise RuntimeError('Test post registry title changed; manual review required')
+    source_match = re.search(r'/document/d/([A-Za-z0-9_-]+)', row[2])
+    if not source_match:
+        raise RuntimeError('Test post source Doc missing; manual review required')
+    doc_id = source_match.group(1)
+    STAGE = 'test post folder access validation'
+    url = 'https://www.googleapis.com/drive/v3/files/' + doc_id + '?fields=parents,mimeType,trashed,version'
+    meta = json.loads(api(url, token))
+    if meta.get('trashed') or meta.get('mimeType') != 'application/vnd.google-apps.document':
+        raise RuntimeError('Test source is not an active document inside the approved folder')
+    validate_post_folder(cfg, token, meta, TEST_FOLDER)
+    version = str(meta.get('version', ''))
+    STAGE = 'test document export'
+    raw = api('https://www.googleapis.com/drive/v3/files/' + doc_id + '/export?mimeType=text%2Fhtml', token)
+    STAGE = 'test article sanitization'
+    body, images = sanitize(raw.decode('utf-8'), test_headers, 'test-', 0)
+    post = dict(id=TEST_ID, slug=TEST_SLUG, title=TEST_TITLE, date=TEST_DATE, original_url=None, kind='new-test', html=body, images=[])
+    TEST_EXPORT.mkdir(parents=True, exist_ok=True)
+    (TEST_EXPORT / 'post.json').write_text(json.dumps(post, ensure_ascii=False, indent=2))
+    proof = {'test_post': {'source_mode': 'private-google-readonly', 'source_version': version, 'source_sha256': hashlib.sha256(raw).hexdigest(), 'imported_at_utc': __import__('datetime').datetime.now(__import__('datetime').timezone.utc).isoformat()}}
+    proof_path = ROOT / 'source-proof.json'
+    if proof_path.exists():
+        existing = json.loads(proof_path.read_text())
+        existing.update(proof)
+        proof_path.write_text(json.dumps(existing))
+    print('PASS: gated vt-0001 labelled test post imported. No source IDs exported.')
+    return True
 
 if __name__ == '__main__':
     try:
