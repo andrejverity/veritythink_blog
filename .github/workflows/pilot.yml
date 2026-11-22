@@ -57,12 +57,12 @@ jobs:
           manifest.update(json.loads(Path('source-proof.json').read_text()))
           p.write_text(json.dumps(manifest, indent=2))
           PYTHON
-      - name: Pass only the approved public Ring snapshot to the saving job
+      - name: Pass only the approved public post snapshots to the saving job
         if: steps.import.outputs.publish == 'true' && github.event_name == 'workflow_dispatch'
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: approved-ring-snapshot
-          path: content/posts/2013-10-14-the-humanitarian-ring/
+          path: content/posts/
           if-no-files-found: error
           retention-days: 1
       - name: Upload only the sanitized static site
@@ -91,47 +91,58 @@ jobs:
         with:
           name: approved-ring-snapshot
           path: snapshot
-      - name: Validate and copy only Ring's approved files
+      - name: Validate and copy only the approved post files
         run: |
           python3 - <<'PYTHON'
           import hashlib, json, shutil
           from pathlib import Path
-          name = '2013-10-14-the-humanitarian-ring'
           root = Path('snapshot')
-          expected = {'post.json', 'images/ring-1.png', 'images/ring-2.png'}
+          allowed = {
+              '2013-10-14-the-humanitarian-ring': {'post.json', 'images/ring-1.png', 'images/ring-2.png'},
+              '2026-11-22-pilot-test-post': {'post.json'},
+          }
+          specs = {
+              '2013-10-14-the-humanitarian-ring': {'id': '64003052404', 'slug': 'the-humanitarian-ring', 'title': 'The Humanitarian Ring', 'date': '2013-10-14', 'original_url': 'https://blog.veritythink.com/post/64003052404/the-humanitarian-ring', 'kind': 'legacy-test', 'images': ['ring-1.png', 'ring-2.png']},
+              '2026-11-22-pilot-test-post': {'id': 'vt-0001', 'slug': 'pilot-test-post', 'title': 'Publishing test, not a real article', 'date': '2026-11-22', 'original_url': None, 'kind': 'new-test', 'images': []},
+          }
+          files = {p.relative_to(root).as_posix() for p in root.rglob('*') if p.is_file()}
+          assert files, 'Empty publishing artifact'
           assert not any(p.is_symlink() for p in root.rglob('*'))
-          assert {p.relative_to(root).as_posix() for p in root.rglob('*') if p.is_file()} == expected
-          post = json.loads((root/'post.json').read_text())
-          assert set(post) == {'id','slug','title','date','original_url','kind','html','images'}
-          assert post['id'] == '64003052404' and post['slug'] == 'the-humanitarian-ring'
-          assert post['title'] == 'The Humanitarian Ring' and post['date'] == '2013-10-14'
-          assert post['original_url'] == 'https://blog.veritythink.com/post/64003052404/the-humanitarian-ring'
-          assert post['kind'] == 'legacy-test' and post['images'] == ['ring-1.png','ring-2.png']
-          assert post['html'].count('<img ') == 2 and len(post['html']) < 1000000
-          for blocked in ['docs.google.com','drive.google.com','googleusercontent.com','data:image','<script','<iframe','<form']:
-              assert blocked not in post['html'].lower()
-          target = Path('content/posts')/name
-          target.mkdir(parents=True, exist_ok=True)
-          for rel in sorted(expected):
-              source = root/rel
-              assert source.stat().st_size < 5000000
-              if source.suffix == '.png':
-                  assert source.read_bytes().startswith(b'\x89PNG\r\n\x1a\n')
-              dest = target/rel
-              dest.parent.mkdir(parents=True, exist_ok=True)
-              shutil.copyfile(source, dest)
+          by_folder = {}
+          for rel_path in files:
+              folder, _, rel = rel_path.partition('/')
+              assert folder in allowed and rel in allowed[folder], 'Unexpected artifact file: ' + rel_path
+              by_folder.setdefault(folder, set()).add(rel)
+          for folder, rels in sorted(by_folder.items()):
+              assert rels == allowed[folder], 'Incomplete artifact for ' + folder
+              post = json.loads((root/folder/'post.json').read_text())
+              spec = specs[folder]
+              assert set(post) == {'id','slug','title','date','original_url','kind','html','images'}
+              for key, value in spec.items():
+                  assert post[key] == value, folder + ': ' + key
+              assert post['html'].count('<img ') == len(spec['images']) and len(post['html']) < 1000000
+              for blocked in ['docs.google.com','drive.google.com','googleusercontent.com','data:image','<script','<iframe','<form']:
+                  assert blocked not in post['html'].lower()
+              for rel in sorted(rels):
+                  source = root/folder/rel
+                  assert source.stat().st_size < 5000000
+                  if source.suffix == '.png':
+                      assert source.read_bytes().startswith(b'\x89PNG\r\n\x1a\n')
+                  dest = Path('content/posts')/folder/rel
+                  dest.parent.mkdir(parents=True, exist_ok=True)
+                  shutil.copyfile(source, dest)
           PYTHON
-      - name: Save approved snapshot without a recursive workflow run
+      - name: Save approved snapshots without a recursive workflow run
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add -- content/posts/2013-10-14-the-humanitarian-ring/post.json content/posts/2013-10-14-the-humanitarian-ring/images/ring-1.png content/posts/2013-10-14-the-humanitarian-ring/images/ring-2.png
+          git add -A -- content/posts/
           git rm --ignore-unmatch -- 2-ring.json 3-ring-1.png 4-ring-2.png
           git rm -r --ignore-unmatch -- content/posts/64003052404-the-humanitarian-ring
           if git diff --cached --quiet; then
-            echo 'Approved Ring snapshot is already current.'
+            echo 'Approved pilot snapshot is already current.'
           else
-            git commit -m 'Save approved Ring publishing snapshot'
+            git commit -m 'Save approved pilot publishing snapshot'
             git push origin HEAD:main
           fi
   deploy:
