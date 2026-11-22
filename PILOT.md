@@ -13,7 +13,7 @@ It preserves the original date, 14 October 2013, stable ID `64003052404`, wordin
 The private Drive layout is:
 
 ```text
-Blog/
+Publishing folder/
   verity-think blog posts [Sheet]
   Posts/
     64003052404-the-humanitarian-ring/
