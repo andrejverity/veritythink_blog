@@ -50,7 +50,7 @@ The importer accepts only the configured Sheet, configured Ring Doc, exact archi
 
 Google access remains keyless and read-only, using short-lived credentials restricted to this repository, main branch and exact workflow. No long-lived service-account keys, billing, free trial or broader Google access were added.
 
-The build job has repository read access and Google identity-token access. A separate manual-only save_snapshot job has repository contents write access but no Google identity-token permission or source configuration. It receives only the sanitised three-file Ring artifact, checks its fixed identity and file list, and stages only those files plus removal of the superseded root snapshots. It rejects stale requests if main changed after the run started. Its repository token does not start another workflow when it commits the snapshot. A separate Pages job deploys only `_site`; no private raw export is uploaded.
+The build job has repository read access and Google identity-token access. A separate manual-only save_snapshot job has repository contents write access but no Google identity-token permission or source configuration. It receives only the sanitised three-file Ring artifact, checks its fixed identity and file list, and stages only those files plus removal of the superseded root snapshots and ID-first post folder. It rejects stale requests if main changed after the run started. Its repository token does not start another workflow when it commits the snapshot. A separate Pages job deploys only `_site`; no private raw export is uploaded.
 
 All third-party Actions are pinned to verified commits. The repository and preview are visible to anyone. `noindex,nofollow` and robots.txt discourage indexing but are not access controls.
 
