@@ -11,7 +11,7 @@ import shutil
 
 ROOT = Path(__file__).resolve().parent
 OUT = ROOT / '_site'
-POST_DIR = ROOT / 'content' / 'posts' / '64003052404-the-humanitarian-ring'
+POST_DIR = ROOT / 'content' / 'posts' / '2013-10-14-the-humanitarian-ring'
 POST = json.loads((POST_DIR / 'post.json').read_text())
 assert POST['kind'] == 'legacy-test'
 assert POST['id'] == '64003052404'
