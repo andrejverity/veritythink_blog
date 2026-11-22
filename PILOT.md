@@ -2,17 +2,21 @@
 
 ## What this proves
 
-This repository builds a static test copy of **The Humanitarian Ring**, originally published on 14 October 2013. `ring.json` is a sanitized snapshot exported from the authoring Google Doc. Both images are copied into this repository. Private source links and credentials are not included.
+This repository builds a static test copy of **The Humanitarian Ring**, originally published on 14 October 2013. `2-ring.json` is a sanitized snapshot exported from the authoring Google Doc. Both images are copied into this repository. Private source links and credentials are not included.
 
 Run locally with Python 3:
 
 ```sh
-python build.py
+cp 1-build.py build.py
+cp 2-ring.json ring.json
+cp 3-ring-1.png ring-1.png
+cp 4-ring-2.png ring-2.png
+python3 build.py
 ```
 
 Open `_site/index.html`, or the generated original-path test page under `_site/post/64003052404/the-humanitarian-ring/`.
 
-The **Build archival pilot** GitHub Actions workflow runs the same build and retains its output as a downloadable artifact. It has read-only repository permissions. It does not deploy a website, change DNS, publish RSS, contact Mailchimp, or modify Google files.
+The **Build archival pilot** GitHub Actions workflow runs the same build and retains its output as a downloadable artifact. The build job has read-only repository permissions. A separate deploy job has only Pages deployment permissions and deploys the test to GitHub Pages. Neither job changes DNS, publishes RSS, contacts Mailchimp, or modifies Google files.
 
 ## Important boundary
 
@@ -26,4 +30,4 @@ Before activating an importer, it must validate document membership in the appro
 
 The build verifies the archival ID/date, exactly two local images, no embedded data-image URLs, no scripts in the article, no private Google links, and no emitted XML feed. It creates a build manifest with image hashes. The test page includes `noindex,nofollow`; this is a search-engine request, not an access control. This repository is public.
 
-Live blog, DNS, Publii, other repositories and Mailchimp are unchanged. GitHub Pages is not enabled by this workflow.
+Live blog, DNS, Publii, other repositories and Mailchimp are unchanged. The owner enabled GitHub Pages with GitHub Actions as its source. The isolated preview is https://andrejverity.github.io/veritythink_blog/ .
