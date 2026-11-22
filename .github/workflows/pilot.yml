@@ -1,0 +1,40 @@
+name: Build archival pilot
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: blog-pilot-pages
+  cancel-in-progress: false
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Normalize browser-uploaded source filenames
+        run: |
+          cp 1-build.py build.py
+          cp 2-ring.json ring.json
+          cp 3-ring-1.png ring-1.png
+          cp 4-ring-2.png ring-2.png
+      - name: Build and validate archival test
+        run: python3 build.py
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy isolated preview to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
