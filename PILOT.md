@@ -18,6 +18,8 @@ Publishing folder/
   Posts/
     2013-10-14-the-humanitarian-ring/
       Article [Google Doc, with its two embedded images]
+    2026-11-22-pilot-test-post/
+      Article [Google Doc, labelled pipeline test]
 ```
 
 The same post folder appears in this public repository after a successful manual publish:
@@ -28,6 +30,8 @@ content/posts/2013-10-14-the-humanitarian-ring/
   images/
     ring-1.png
     ring-2.png
+content/posts/2026-11-22-pilot-test-post/
+  post.json   [only after the gated test publish]
 ```
 
 The Google Doc is the writing source. The repository folder is a generated, public-ready snapshot, not a second place to edit the article. Private source links, IDs, account settings, credentials and notes are not stored there. Keep the folder name stable when changing a headline. No separate Source images folder is needed for this test because both images remain embedded in Article.
@@ -44,9 +48,13 @@ A correction uses the same Doc, ID and original date. Set Migration status to `D
 
 The existing hourly schedule remains configured at minute 37 UTC, but unattended operation has not been verified. Manual Run workflow is the tested route. Only manual runs save snapshots to the repository. Source-code pushes can still build/deploy the Ring test. No timer repair is part of this folder change.
 
+## New-post test (vt-0001)
+
+A clearly labelled test post verifies the new-post path. Its registry row is in the Sheet's New posts tab with Post ID `vt-0001`; its writing Doc is Article inside `Posts/2026-11-22-pilot-test-post`. While the row's Editorial status is not exactly `Publish test`, the post is skipped entirely. When set to `Publish test`, a manual **Run workflow** imports it (fixed title, zero images, the same sanitization and blocked-content rules), saves its `post.json` snapshot, and deploys the preview. The preview index then lists both posts; the test page is at `post/vt-0001/pilot-test-post/`. Editing the Doc and running the workflow again tests a correction. The test post emits no RSS or email, and its RSS/email eligibility must stay `Not eligible`. Ring's gates and checks are unchanged. The test post's internal ID `vt-0001` is permanent and independent of its editable title; its folder name follows the date-first convention and stays fixed once publishing starts.
+
 ## Scope and safety
 
-The importer accepts only the configured Sheet, configured Ring Doc, exact archival ID/date/original URL, and `Publish test` gate. The Sheet stays directly in the approved publishing folder. The Doc may be there during transition or in the exact `Posts/2013-10-14-the-humanitarian-ring` path below it. The importer verifies every folder in that path, rather than allowing arbitrary Drive sources.
+The importer accepts only the configured Sheet, configured Ring Doc, exact archival ID/date/original URL, the gated vt-0001 test post with its fixed identity and folder, and `Publish test` gates. The Sheet stays directly in the approved publishing folder. The Doc may be there during transition or in the exact `Posts/2013-10-14-the-humanitarian-ring` path below it. The importer verifies every folder in that path, rather than allowing arbitrary Drive sources.
 
 Google access remains keyless and read-only, using short-lived credentials restricted to this repository, main branch and exact workflow. No long-lived service-account keys, billing, free trial or broader Google access were added.
 
