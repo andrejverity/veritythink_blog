@@ -18,7 +18,7 @@ import urllib.request
 
 ROOT = Path(__file__).resolve().parent
 POST_ID = '64003052404'
-POST_FOLDER = '64003052404-the-humanitarian-ring'
+POST_FOLDER = '2013-10-14-the-humanitarian-ring'
 EXPORT = ROOT / 'content' / 'posts' / POST_FOLDER
 ORIGINAL = 'https://blog.veritythink.com/post/64003052404/the-humanitarian-ring'
 STAGE = 'configuration'
