@@ -126,7 +126,7 @@ def sanitize(source, check_headers, image_prefix, expected_images):
                 raise RuntimeError('Invalid pilot image')
             name = image_prefix + str(len(images)+1) + '.png'
             images.append((name, raw))
-            return ' '
+            return '<img src="' + name + '" alt="Original Humanitarian Ring illustration ' + str(len(images)) + '" loading="lazy"/>'
         inner = ''.join(render(c) for c in n.children)
         if n.tag == 'p' and not n.text().strip() and not n.contains_image():
             return ''
@@ -141,9 +141,9 @@ def sanitize(source, check_headers, image_prefix, expected_images):
                 return inner
             if parsed.hostname and (parsed.hostname.endswith('google.com') or parsed.hostname.endswith('googleusercontent.com')):
                 raise RuntimeError('Private Google link requires manual review')
-            return ' ' + inner + ' '
+            return '<a href="' + html.escape(href, quote=True) + '">' + inner + '</a>'
         if n.tag == 'br':
-            return ' '
+            return '<br/>'
         return '<' + n.tag + '>' + inner + '</' + n.tag + '>'
     body = ''.join(render(c) for c in tree.body.children)
     if len(images) != expected_images:
