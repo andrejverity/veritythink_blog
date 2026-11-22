@@ -96,7 +96,7 @@ jobs:
           python3 - <<'PYTHON'
           import hashlib, json, shutil
           from pathlib import Path
-          name = '64003052404-the-humanitarian-ring'
+          name = '2013-10-14-the-humanitarian-ring'
           root = Path('snapshot')
           expected = {name + '/post.json', name + '/images/ring-1.png', name + '/images/ring-2.png'}
           assert not any(p.is_symlink() for p in root.rglob('*'))
@@ -125,7 +125,7 @@ jobs:
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add -- content/posts/64003052404-the-humanitarian-ring/post.json content/posts/64003052404-the-humanitarian-ring/images/ring-1.png content/posts/64003052404-the-humanitarian-ring/images/ring-2.png
+          git add -- content/posts/2013-10-14-the-humanitarian-ring/post.json content/posts/2013-10-14-the-humanitarian-ring/images/ring-1.png content/posts/2013-10-14-the-humanitarian-ring/images/ring-2.png
           git rm --ignore-unmatch -- 2-ring.json 3-ring-1.png 4-ring-2.png
           if git diff --cached --quiet; then
             echo 'Approved Ring snapshot is already current.'
