@@ -18,6 +18,8 @@ import urllib.request
 
 ROOT = Path(__file__).resolve().parent
 POST_ID = '64003052404'
+POST_FOLDER = '64003052404-the-humanitarian-ring'
+EXPORT = ROOT / 'content' / 'posts' / POST_FOLDER
 ORIGINAL = 'https://blog.veritythink.com/post/64003052404/the-humanitarian-ring'
 STAGE = 'configuration'
 
@@ -146,8 +148,19 @@ def main():
     for key, expected_type in [('spreadsheet_id', 'application/vnd.google-apps.spreadsheet'), ('document_id', 'application/vnd.google-apps.document')]:
         url = 'https://www.googleapis.com/drive/v3/files/' + cfg[key] + '?fields=parents,mimeType,trashed,version'
         meta = json.loads(api(url, token))
-        if cfg['folder_id'] not in meta.get('parents', []) or meta.get('trashed') or meta.get('mimeType') != expected_type:
+        if meta.get('trashed') or meta.get('mimeType') != expected_type:
             raise RuntimeError('Source is not an active file inside the approved folder')
+        parents = meta.get('parents', [])
+        if cfg['folder_id'] not in parents:
+            if key != 'document_id' or len(parents) != 1:
+                raise RuntimeError('Source is outside the approved folder')
+            post_folder = json.loads(api('https://www.googleapis.com/drive/v3/files/' + parents[0] + '?fields=name,parents,mimeType,trashed', token))
+            ancestors = post_folder.get('parents', [])
+            if post_folder.get('trashed') or post_folder.get('name') != POST_FOLDER or post_folder.get('mimeType') != 'application/vnd.google-apps.folder' or len(ancestors) != 1:
+                raise RuntimeError('Unexpected post folder; manual review required')
+            posts_folder = json.loads(api('https://www.googleapis.com/drive/v3/files/' + ancestors[0] + '?fields=name,parents,mimeType,trashed', token))
+            if posts_folder.get('trashed') or posts_folder.get('name') != 'Posts' or posts_folder.get('mimeType') != 'application/vnd.google-apps.folder' or cfg['folder_id'] not in posts_folder.get('parents', []):
+                raise RuntimeError('Post folder is outside the approved publishing path')
         if key == 'document_id':
             version = str(meta.get('version', ''))
     STAGE = 'spreadsheet read'
@@ -168,10 +181,13 @@ def main():
     raw = api('https://www.googleapis.com/drive/v3/files/' + cfg['document_id'] + '/export?mimeType=text%2Fhtml', token)
     STAGE = 'article sanitization'
     body, images = sanitize(raw.decode('utf-8'))
+    (EXPORT / 'images').mkdir(parents=True, exist_ok=True)
     for name, data in images:
-        (ROOT / name).write_bytes(data)
+        (EXPORT / 'images' / name).write_bytes(data)
+        (ROOT / name).write_bytes(data) # Ephemeral compatibility input, never committed
     post = dict(id=POST_ID, slug='the-humanitarian-ring', title='The Humanitarian Ring', date='2013-10-14', original_url=ORIGINAL, kind='legacy-test', html=body, images=[n for n, _ in images])
-    (ROOT / 'ring.json').write_text(json.dumps(post, ensure_ascii=False, indent=2))
+    (EXPORT / 'post.json').write_text(json.dumps(post, ensure_ascii=False, indent=2))
+    (ROOT / 'ring.json').write_text(json.dumps(post, ensure_ascii=False, indent=2)) # Ephemeral compatibility input
     proof = {'source_mode': 'private-google-readonly', 'source_version': version, 'source_sha256': hashlib.sha256(raw).hexdigest(), 'imported_at_utc': __import__('datetime').datetime.now(__import__('datetime').timezone.utc).isoformat()}
     (ROOT / 'source-proof.json').write_text(json.dumps(proof))
     output_publish(True)
