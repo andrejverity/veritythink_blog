@@ -16,14 +16,14 @@ The private Drive layout is:
 Publishing folder/
   verity-think blog posts [Sheet]
   Posts/
-    64003052404-the-humanitarian-ring/
+    2013-10-14-the-humanitarian-ring/
       Article [Google Doc, with its two embedded images]
 ```
 
 The same post folder appears in this public repository after a successful manual publish:
 
 ```text
-content/posts/64003052404-the-humanitarian-ring/
+content/posts/2013-10-14-the-humanitarian-ring/
   post.json
   images/
     ring-1.png
@@ -46,7 +46,7 @@ The existing hourly schedule remains configured at minute 37 UTC, but unattended
 
 ## Scope and safety
 
-The importer accepts only the configured Sheet, configured Ring Doc, exact archival ID/date/original URL, and `Publish test` gate. The Sheet stays directly in the approved publishing folder. The Doc may be there during transition or in the exact `Posts/64003052404-the-humanitarian-ring` path below it. The importer verifies every folder in that path, rather than allowing arbitrary Drive sources.
+The importer accepts only the configured Sheet, configured Ring Doc, exact archival ID/date/original URL, and `Publish test` gate. The Sheet stays directly in the approved publishing folder. The Doc may be there during transition or in the exact `Posts/2013-10-14-the-humanitarian-ring` path below it. The importer verifies every folder in that path, rather than allowing arbitrary Drive sources.
 
 Google access remains keyless and read-only, using short-lived credentials restricted to this repository, main branch and exact workflow. No long-lived service-account keys, billing, free trial or broader Google access were added.
 
