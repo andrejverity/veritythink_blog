@@ -12,7 +12,7 @@ The original article date, 14 October 2013, and stable post ID, `64003052404`, r
 
 1. Edit the article body in the Ring Google Doc, below its three pilot header paragraphs. Keep those header paragraphs in place.
 2. In the spreadsheet's **Redirects** tab, set the Ring row's **Migration status** to exactly `Publish test`.
-3. GitHub Actions checks hourly, at minute 17 UTC. GitHub may queue or delay scheduled runs. For an immediate request, open **Actions → Build archival pilot → Run workflow**, use `main`, and run it.
+3. GitHub Actions is configured to check hourly, at minute 37 UTC. The unattended timer is still being verified. GitHub may queue or delay scheduled runs. For an immediate request, open **Actions → Build archival pilot → Run workflow**, use `main`, and run it.
 4. Check the completed workflow and preview. `build-manifest.json` records the source version, import time, original date, and image hashes, without private source identifiers.
 
 GitHub can delay scheduled runs and can automatically disable them after 60 days without repository activity. Editing a Google Doc does not create a repository commit. If the schedule is disabled, re-enable it in Actions before relying on hourly checks. This pilot is not a guaranteed real-time or maintenance-free production publisher. GitHub documents this behavior at https://docs.github.com/en/actions/how-tos/manage-workflow-runs/disable-and-enable-workflows .
