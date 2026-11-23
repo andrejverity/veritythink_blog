@@ -28,6 +28,12 @@ STAGE = 'configuration'
 
 # Rows in these statuses are (re)imported from their Google Doc.
 PUBLISH_GATES = {'Publish', 'Published', 'Publish test'}
+# Source-of-truth resource IDs that must never appear in public output. The
+# management sheet, the Posts folder and every migrated source Doc are private;
+# legacy posts may carry their original public links (including old public
+# Google links), so blocking is keyed to these exact IDs, not to google hosts.
+FORBIDDEN_IDS = {'1yLSR0PorJld59J9xG1jbzecNu1s0KlYLXdBx94ipp30',
+                 '11QcbcYin-3GlyU2GYtXgij54KpRHYDuM'}
 # vt-0001 labelled pipeline test (New posts tab) keeps its fixed identity.
 TEST_ID = 'vt-0001'
 TEST_FOLDER = '2026-11-22-pilot-test-post'
@@ -102,7 +108,8 @@ def sanitize(source, title, folder):
     if tree.body is None:
         raise RuntimeError('Missing article body')
     parts = [c for c in tree.body.children if isinstance(c, Node)]
-    if len(parts) < 3 or parts[0].text().strip() != title:
+    norm = lambda s: ' '.join(s.split())
+    if len(parts) < 3 or norm(parts[0].text()) != norm(title):
         raise RuntimeError('Article title header changed; manual review required: ' + folder)
     if not parts[1].text().strip().startswith('Original post:'):
         raise RuntimeError('Article date header changed; manual review required: ' + folder)
@@ -143,8 +150,8 @@ def sanitize(source, title, folder):
             parsed = urllib.parse.urlparse(href)
             if parsed.scheme not in {'http', 'https', 'mailto'}:
                 return inner
-            if parsed.hostname and (parsed.hostname.endswith('google.com') or parsed.hostname.endswith('googleusercontent.com') or parsed.hostname.endswith('drive.google.com') or parsed.hostname.endswith('docs.google.com')):
-                raise RuntimeError('Private Google link requires manual review: ' + folder)
+            if any(fid in href for fid in FORBIDDEN_IDS):
+                raise RuntimeError('Private source link requires manual review: ' + folder)
             return '<a href="' + html.escape(href, quote=True) + '">' + inner + '</a>'
         if n.tag == 'br':
             return '<br/>'
@@ -152,7 +159,7 @@ def sanitize(source, title, folder):
             return '<hr/>'
         return '<' + n.tag + '>' + inner + '</' + n.tag + '>'
     body = ''.join(render(c) for c in tree.body.children)
-    if 'docs.google.com' in body or 'drive.google.com' in body or 'data:image' in body:
+    if any(fid in body for fid in FORBIDDEN_IDS) or 'data:image' in body:
         raise RuntimeError('Unsafe source reference refused: ' + folder)
     if len(body) > 1_000_000:
         raise RuntimeError('Article too large: ' + folder)
@@ -186,6 +193,11 @@ def import_archive_rows(cfg, token):
     global STAGE
     STAGE = 'redirects registry read'
     rows = sheet_values(cfg, token, 'Redirects!A1:N200')
+    for row in rows[1:]:
+        doc_cell = row[3] if len(row) > 3 else ''
+        source_match = DOC_RE.search(doc_cell or '')
+        if source_match:
+            FORBIDDEN_IDS.add(source_match.group(1))
     imported = []
     seen_folders = set()
     for row in rows[1:]:
