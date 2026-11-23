@@ -1,0 +1,14 @@
+{
+  "id": "682509776492658688",
+  "slug": "drupal-as-a-static-service",
+  "title": "Drupal-as-a-Static-Service",
+  "date": "2022-04-25",
+  "display_date": "25 April 2022",
+  "timestamp_utc": "2022-04-25T13:07:24+00:00",
+  "original_url": "https://blog.veritythink.com/post/682509776492658688/drupal-as-a-static-service",
+  "kind": "archive",
+  "html": "<p>A content management system (CMS) for editors that generates a static site optimized for speed and security? Why not! Many static-site generators still require technical knowledge and/or developer intervention. So, the idea of offering our clients a Drupal CMS to manage their site was definitely enticing. It was especially attractive given we could (comparatively) forget about security for the resulting site.</p><p>Inspired by emerging <a href=\"https://www.strattic.com/\">WordPress-as-a-Static-Services</a>, the team agreed to explore and to build a Drupal-as-a-Static-Service proof of content (POC) for some of our existing Drupal sites. And, in March 2022, we launched two: the <a href=\"https://unocha.us14.list-manage.com/track/click?u=731422fb6488c955edec9c5b1&amp;amp;id=2057737ae3&amp;amp;e=e762b46a4a\">Indicator Registry</a> and <a href=\"https://unocha.us14.list-manage.com/track/click?u=731422fb6488c955edec9c5b1&amp;amp;id=dc6c36dd83&amp;amp;e=e762b46a4a\">Protection of Civilians - Aide Memoire</a>.</p><p>How is the editing process different?</p><p>Editors access a private Drupal instance of their site (not available on the public internet) where they can make changes to the website using the Drupal CMS interface. The editor then “publishes” their changes with a magical button. This triggers a series of automated processes which generate a static version of the website. </p><p><img src=\"images/image-1.png\" alt=\"Illustration 1 from the original post\" loading=\"lazy\"/>Take a look at the <a href=\"https://ocha-digitalservices.fleeq.io/l/m16h2ndn4b-wz2pqu3221\">30 second video that outlines the concept</a>. </p><p>Why go static? </p><p>Static websites lack the “moving parts” of dynamic websites. Visitors interact with a fixed version (like a photocopy) of the website. This setup provides additional security while providing a lightning fast site. Editors manage the site’s content in a private, editor-only Drupal CMS.</p><p>Technical notes:</p><ol><li>We are leveraging Tome - <a href=\"https://tome.fyi/\">https://tome.fyi/</a> to build the static site</li><li>We are using Lunr - <a href=\"https://lunrjs.com/\">https://lunrjs.com/</a> - for search</li><li>We are using Jenkins to automate several processes in the background</li></ol><p>There has not yet been any decision made regarding the project’s future. Regardless of where it goes, it has been fun to find a solution that maintains the user’s experience while greatly improving performance and cybersecurity.</p><p>Andrej</p>",
+  "images": [
+    "image-1.png"
+  ]
+}

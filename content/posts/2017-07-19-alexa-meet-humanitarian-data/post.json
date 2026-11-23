@@ -1,0 +1,12 @@
+{
+  "id": "163158259794",
+  "slug": "alexa-meet-humanitarian-data",
+  "title": "Alexa, Meet Humanitarian Data",
+  "date": "2017-07-19",
+  "display_date": "19 July 2017",
+  "timestamp_utc": "2017-07-19T02:47:54+00:00",
+  "original_url": "https://blog.veritythink.com/post/163158259794/alexa-meet-humanitarian-data",
+  "kind": "archive",
+  "html": "<p>Over the past couple years, OCHA has been moving to a micro-services architecture for its systems. Essentially, we are separating the front-end and back-end of tools and websites using APIs. One of the benefits becomes that tools are able to call on the back-ends of other systems. Perhaps our most obvious example is the <a href=\"https://itunes.apple.com/us/app/reliefweb-crises/id1123700391?mt=8\">ReliefWeb Crises app</a> which calls upon many of the OCHA micro-services along with several external APIs to compile itself.</p><p>The benefit of separating front-end from back-end has been quite obvious from an application stand-point. But, more recently, I have realized that micro-services maybe provide another benefit – improved accessibility to humanitarian data.</p><p>A couple months ago, <a href=\"https://www.linkedin.com/in/jeremymandrews/\">Jeremy Andrews</a> joined me in the OCHA Digital Services team. I asked him to see if he could surface the ReliefWeb Crises numbers through Amazon’s Alexa. Yes, I mean accessing information about crisis affected countries exclusively with voice commands.  No mobile phone, no tablet and no computer. The video below shows the result after about 10-15 hours of development work by Jeremy.</p><p><a href=\"https://www.youtube.com/watch?v=Tz4MIhpfMnA\">Embedded video: watch on YouTube</a></p><p>[Video link: <a href=\"https://www.youtube.com/watch?v=Tz4MIhpfMnA\">https://www.youtube.com/watch?v=Tz4MIhpfMnA</a>]</p><p>Although accessibility will remain an extremely important factor for websites and tools, making use of micro-services (APIs) and artificial intelligence (e.g. Alexa) may not only provide a new frontier to explore humanitarian information for everyone, but may even help make such data become ubiquitous for all decision makers.</p><p>Andrej</p>",
+  "images": []
+}
