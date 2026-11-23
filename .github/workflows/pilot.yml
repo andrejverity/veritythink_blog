@@ -1,20 +1,18 @@
-name: Build archival pilot
+name: Build blog preview
 on:
   push:
     branches: [main]
   workflow_dispatch:
-  schedule:
-    - cron: '37 * * * *'
 permissions:
   contents: read
 concurrency:
-  group: blog-pilot-pages
+  group: blog-preview-pages
   cancel-in-progress: false
 jobs:
   build:
     if: github.repository == 'andrejverity/veritythink_blog' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
-    timeout-minutes: 8
+    timeout-minutes: 15
     permissions:
       contents: read
       id-token: write
@@ -24,7 +22,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - name: Prepare the isolated pilot builder and importer
+      - name: Prepare the builder and importer
         run: |
           cp 1-build.py build.py
           cp 1-import_google.py import_google.py
@@ -35,17 +33,17 @@ jobs:
           workload_identity_provider: ${{ secrets.GOOGLE_WIF_PROVIDER }}
           service_account: ${{ secrets.GOOGLE_READER_SERVICE_ACCOUNT }}
           token_format: access_token
-          access_token_lifetime: 600s
+          access_token_lifetime: 900s
           access_token_scopes: https://www.googleapis.com/auth/drive.readonly,https://www.googleapis.com/auth/spreadsheets.readonly
           create_credentials_file: false
           export_environment_variables: false
-      - name: Read only the approved archival pilot
+      - name: Read the gated posts from private Google sources
         id: import
         env:
           GOOGLE_ACCESS_TOKEN: ${{ steps.google.outputs.access_token }}
           BLOG_SOURCE_CONFIG: ${{ secrets.BLOG_SOURCE_CONFIG }}
         run: python3 import_google.py
-      - name: Build and validate archival test
+      - name: Build and validate the preview site
         if: steps.import.outputs.publish == 'true'
         run: |
           python3 build.py
@@ -57,12 +55,12 @@ jobs:
           manifest.update(json.loads(Path('source-proof.json').read_text()))
           p.write_text(json.dumps(manifest, indent=2))
           PYTHON
-      - name: Pass only the approved public post snapshots to the saving job
+      - name: Pass the approved public snapshots to the saving job
         if: steps.import.outputs.publish == 'true' && github.event_name == 'workflow_dispatch'
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: approved-ring-snapshot
-          path: content/posts/
+          name: approved-blog-snapshot
+          path: content/
           if-no-files-found: error
           retention-days: 1
       - name: Upload only the sanitized static site
@@ -75,7 +73,7 @@ jobs:
     needs: build
     if: needs.build.outputs.publish == 'true' && github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
-    timeout-minutes: 3
+    timeout-minutes: 5
     permissions:
       contents: write
     steps:
@@ -89,60 +87,76 @@ jobs:
         run: test "$(git rev-parse HEAD)" = "$REQUEST_SHA"
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
-          name: approved-ring-snapshot
+          name: approved-blog-snapshot
           path: snapshot
-      - name: Validate and copy only the approved post files
+      - name: Validate and sync the approved public snapshots
         run: |
           python3 - <<'PYTHON'
-          import hashlib, json, shutil
+          import json, re, shutil
           from pathlib import Path
           root = Path('snapshot')
-          allowed = {
-              '2013-10-14-the-humanitarian-ring': {'post.json', 'images/ring-1.png', 'images/ring-2.png'},
-              '2026-11-22-pilot-test-post': {'post.json'},
-          }
-          specs = {
-              '2013-10-14-the-humanitarian-ring': {'id': '64003052404', 'slug': 'the-humanitarian-ring', 'title': 'The Humanitarian Ring', 'date': '2013-10-14', 'original_url': 'https://blog.veritythink.com/post/64003052404/the-humanitarian-ring', 'kind': 'legacy-test', 'images': ['ring-1.png', 'ring-2.png']},
-              '2026-11-22-pilot-test-post': {'id': 'vt-0001', 'slug': 'pilot-test-post', 'title': 'Publishing test, not a real article', 'date': '2026-11-22', 'original_url': None, 'kind': 'new-test', 'images': []},
-          }
-          files = {p.relative_to(root).as_posix() for p in root.rglob('*') if p.is_file()}
+          files = [p for p in root.rglob('*') if p.is_file()]
           assert files, 'Empty publishing artifact'
           assert not any(p.is_symlink() for p in root.rglob('*'))
+          folder_re = re.compile(r'^\d{4}-\d{2}-\d{2}-[a-z0-9][a-z0-9-]*$')
+          img_re = re.compile(r'^image-\d+\.(png|jpg|gif)$')
+          magic = {'png': b'\x89PNG\r\n\x1a\n', 'jpg': b'\xff\xd8\xff', 'gif': b'GIF8'}
+          blocked = ['docs.google.com', 'drive.google.com', 'googleusercontent.com', 'data:image', '<script', '<iframe', '<form']
           by_folder = {}
-          for rel_path in files:
-              folder, _, rel = rel_path.partition('/')
-              assert folder in allowed and rel in allowed[folder], 'Unexpected artifact file: ' + rel_path
-              by_folder.setdefault(folder, set()).add(rel)
+          for p in files:
+              rel = p.relative_to(root).as_posix()
+              assert rel.startswith('content/'), 'Unexpected artifact path: ' + rel
+              if rel == 'content/site.json':
+                  cfg = json.loads(p.read_text())
+                  assert isinstance(cfg, dict)
+                  for k, v in cfg.items():
+                      assert isinstance(v, str) and not any(b in v.lower() for b in blocked), 'Unsafe site config: ' + k
+                      if k.startswith('nav_') and k.endswith('_url'):
+                          assert v.startswith('https://') and 'google' not in v, 'Unsafe nav URL: ' + k
+                  continue
+              parts = rel.split('/')
+              assert len(parts) >= 3 and parts[1] == 'posts', 'Unexpected artifact path: ' + rel
+              folder = parts[2]
+              assert folder_re.fullmatch(folder), 'Unexpected post folder: ' + folder
+              by_folder.setdefault(folder, set()).add('/'.join(parts[3:]))
+          assert by_folder, 'No post snapshots in artifact'
           for folder, rels in sorted(by_folder.items()):
-              assert rels == allowed[folder], 'Incomplete artifact for ' + folder
-              post = json.loads((root/folder/'post.json').read_text())
-              spec = specs[folder]
-              assert set(post) == {'id','slug','title','date','original_url','kind','html','images'}
-              for key, value in spec.items():
-                  assert post[key] == value, folder + ': ' + key
-              assert post['html'].count('<img ') == len(spec['images']) and len(post['html']) < 1000000
-              for blocked in ['docs.google.com','drive.google.com','googleusercontent.com','data:image','<script','<iframe','<form']:
-                  assert blocked not in post['html'].lower()
-              for rel in sorted(rels):
-                  source = root/folder/rel
-                  assert source.stat().st_size < 5000000
-                  if source.suffix == '.png':
-                      assert source.read_bytes().startswith(b'\x89PNG\r\n\x1a\n')
-                  dest = Path('content/posts')/folder/rel
-                  dest.parent.mkdir(parents=True, exist_ok=True)
-                  shutil.copyfile(source, dest)
+              assert 'post.json' in rels, 'Missing post.json: ' + folder
+              post = json.loads((root/'content'/'posts'/folder/'post.json').read_text())
+              assert set(post) == {'id','slug','title','date','display_date','timestamp_utc','original_url','kind','html','images'}, folder
+              assert post['kind'] in {'archive', 'new-test'}, folder
+              assert post['date'] + '-' + post['slug'] == folder, folder + ': folder must stay date-first and match slug'
+              if post['original_url'] is not None:
+                  assert post['original_url'].startswith('https://blog.veritythink.com/post/'), folder
+              low = post['html'].lower()
+              for b in blocked:
+                  assert b not in low, folder + ': blocked content ' + b
+              assert len(post['html']) < 1_000_000, folder + ': article too large'
+              assert post['html'].count('<img ') == len(post['images']), folder + ': image count'
+              expected = {'images/' + n for n in post['images']}
+              assert set(rels) == {'post.json'} | expected, folder + ': file list mismatch'
+              for n in post['images']:
+                  assert img_re.fullmatch(n), folder + ': bad image name ' + n
+                  data = (root/'content'/'posts'/folder/'images'/n).read_bytes()
+                  ext = n.rsplit('.', 1)[-1]
+                  assert data.startswith(magic[ext]) and len(data) < 8_000_000, folder + ': bad image ' + n
+          dest = Path('content')
+          if dest.exists():
+              shutil.rmtree(dest)
+          shutil.copytree(root/'content', dest)
+          print('Validated ' + str(len(by_folder)) + ' post snapshot(s).')
           PYTHON
       - name: Save approved snapshots without a recursive workflow run
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add -A -- content/posts/
+          git add -A -- content/
           git rm --ignore-unmatch -- 2-ring.json 3-ring-1.png 4-ring-2.png
           git rm -r --ignore-unmatch -- content/posts/64003052404-the-humanitarian-ring
           if git diff --cached --quiet; then
-            echo 'Approved pilot snapshot is already current.'
+            echo 'Approved snapshot is already current.'
           else
-            git commit -m 'Save approved pilot publishing snapshot'
+            git commit -m 'Save approved blog publishing snapshot'
             git push origin HEAD:main
           fi
   deploy:
@@ -157,6 +171,6 @@ jobs:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
-      - name: Deploy isolated preview to GitHub Pages
+      - name: Deploy preview to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1
