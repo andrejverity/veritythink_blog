@@ -47,7 +47,7 @@ The Google Doc is the writing source. The repository folder is a generated, publ
 4. The workflow imports all gated rows (about 2-3 minutes), validates the build, saves the approved snapshots to `content/`, and deploys. A failed run leaves the last successful preview online.
 5. The Sheet is never written by the workflow: Google access from Actions is keyless and read-only. Status changes (for example marking rows `Published`) are made by people or by Instinct's own tools.
 
-There is no automatic schedule: the hourly timer was removed. Run the workflow manually when you want to publish.
+There is no hourly schedule. A manual Run workflow reads fresh Docs, builds, saves snapshots and deploys. Code pushes to main also read fresh Docs and build/deploy, but do not save snapshots. No separate export step is needed for ordinary edits.
 
 ## Redirect stubs
 
