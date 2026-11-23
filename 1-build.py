@@ -28,7 +28,10 @@ POSTS_ROOT = ROOT / 'content' / 'posts'
 BASE = '/veritythink_blog'
 SITE_URL = 'https://andrejverity.github.io'
 
-BLOCKED = ['docs.google.com', 'drive.google.com', 'googleusercontent.com', 'data:image', '<script', '<iframe', '<form']
+# The import step blocks every private source ID (sheet, Posts folder, all
+# source Docs); this is defence-in-depth with the two public-known IDs plus
+# payload markers. Legacy public links (incl. old public Google links) pass.
+BLOCKED = ['1ylsr0porjld59j9xg1jbzecnu1s0klyl', '11qcbcyin-3glyu2gytxgij54kprhydum', 'data:image', '<script', '<iframe', '<form']
 
 CSS = '''
 :root{--ink:#22211e;--paper:#ffffff;--red:#a72b31;--line:#d8d2c6;--grey:#6b675e}
