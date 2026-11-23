@@ -1,76 +1,72 @@
-# VerityThink blog: Ring-only manual publishing pilot
+# VerityThink blog: archive publishing pipeline
 
-## What works
+## What this does
 
-**Build archival pilot** reads the private publishing Sheet and the approved Humanitarian Ring Google Doc, imports its article and two embedded images, and deploys this isolated GitHub Pages preview:
+**Build blog preview** reads the private publishing Sheet and the per-post Google Docs, imports every gated post, and deploys the full archive to an isolated GitHub Pages preview:
 
 https://andrejverity.github.io/veritythink_blog/
 
-It preserves the original date, 14 October 2013, stable ID `64003052404`, wording, links and images. This is an archival test, not a new post. No RSS or email is emitted. The other historical rows and the New posts tab are not published.
+All 104 original posts are live on the preview with their original dates, wording, links and images. Each post gets a canonical date-first URL `/post/YYYY-MM-DD-slug/`, and every old Tumblr URL (`/post/<id>/` and `/post/<id>/<slug>/`) serves a redirect stub page. A full-post `feed.xml` is regenerated at each publish. Post-to-post (previous/next) and top navigation to the main VerityThink site are built in; the top links are configured from the Sheet's Site tab.
 
-## Matching post folders
+This is still a preview: every page carries a preview banner and `noindex`, and the live blog, its domain, DNS and Mailchimp are untouched. The redirect stubs are browser redirects (meta refresh), because GitHub Pages cannot send server 301s. Real redirects arrive only at cutover.
 
-The private Drive layout is:
+## Source layout (private)
 
 ```text
 Publishing folder/
-  verity-think blog posts [Sheet]
+  verity-think blog posts [Sheet: Redirects, New posts, Site, Guide tabs]
   Posts/
     2013-10-14-the-humanitarian-ring/
-      Article [Google Doc, with its two embedded images]
+      Article [Google Doc, images embedded]
+      ring-1.png, ring-2.png [source images]
+    2015-03-14-time-to-cut-the-creative-red-tape/
+      Article
+      image-1.png ... image-6.png
+    ... one date-first folder per post, 104 in total ...
     2026-11-22-pilot-test-post/
       Article [Google Doc, labelled pipeline test]
 ```
 
-The same post folder appears in this public repository after a successful manual publish:
+The public repository mirrors each published post:
 
 ```text
-content/posts/2013-10-14-the-humanitarian-ring/
+content/posts/<date-first folder>/
   post.json
   images/
-    ring-1.png
-    ring-2.png
-content/posts/2026-11-22-pilot-test-post/
-  post.json   [only after the gated test publish]
+    image-1.png ...
+content/site.json        [from the Sheet's Site tab]
 ```
 
-The Google Doc is the writing source. The repository folder is a generated, public-ready snapshot, not a second place to edit the article. Private source links, IDs, account settings, credentials and notes are not stored there. Keep the folder name stable when changing a headline. No separate Source images folder is needed for this test because both images remain embedded in Article.
+The Google Doc is the writing source. The repository folder is a generated, public-ready snapshot, not a second place to edit. Private source links, IDs, account settings, credentials and notes are never stored there: the importer and builder both block the Sheet ID, the Posts folder ID and every source Doc ID from public output. Keep folder names stable when changing headlines.
 
-## Publish or correct Ring
+## Publishing a correction or new import
 
-1. Edit Article below its three pilot header paragraphs. Keep those headers, the original date, stable ID and source link intact.
-2. In the Sheet's Redirects tab, set the Ring Migration status to exactly `Publish test`.
-3. Open **Actions > Build archival pilot > Run workflow**, select `main`, and run it.
-4. Check that build, save_snapshot and deploy succeed. The manual run saves the approved Ring export in its GitHub folder, then deploys the preview. If the snapshot is unchanged, no new snapshot commit is made.
-5. Open the preview. Its `build-manifest.json` records the current import time, source version, original date and image hashes without private source identifiers.
+1. Edit the post's Article Doc below its three header paragraphs (title, `Original post: <date>`, `Original blog post` link). Keep those headers intact.
+2. In the Sheet's Redirects tab, the row's Migration status must be `Publish` or `Published` (`Publish test` for the Ring pilot row). `Doc created` means the source is ready but not yet queued. Any other value, such as `Draft`, skips the post.
+3. Open **Actions > Build blog preview > Run workflow**, select `main`, and run it.
+4. The workflow imports all gated rows (about 2-3 minutes), validates the build, saves the approved snapshots to `content/`, and deploys. A failed run leaves the last successful preview online.
+5. The Sheet is never written by the workflow: Google access from Actions is keyless and read-only. Status changes (for example marking rows `Published`) are made by people or by Instinct's own tools.
 
-A correction uses the same Doc, ID and original date. Set Migration status to `Draft` to pause future updates; this does not withdraw the existing public preview or remove its saved snapshot. Read/validation failures also leave the last successful preview online.
+There is no automatic schedule: the hourly timer was removed. Run the workflow manually when you want to publish.
 
-The existing hourly schedule remains configured at minute 37 UTC, but unattended operation has not been verified. Manual Run workflow is the tested route. Only manual runs save snapshots to the repository. Source-code pushes can still build/deploy the Ring test. No timer repair is part of this folder change.
+## Redirect stubs
+
+Each published post creates two stub pages mapping its old Tumblr URLs to the canonical one. They are HTML meta-refresh pages labelled as preview redirects. During cutover, the same mapping drives real server-side redirects on the live domain; until then, old URLs on the live blog keep working as they are.
+
+## RSS
+
+`feed.xml` lists archive posts with their original dates and stable IDs, newest first. It is rebuilt on every publish, so corrections flow through. The vt-0001 test post never appears in the feed. No email is sent anywhere in this pipeline.
 
 ## New-post test (vt-0001)
 
-A clearly labelled test post verifies the new-post path. Its registry row is in the Sheet's New posts tab with Post ID `vt-0001`; its writing Doc is Article inside `Posts/2026-11-22-pilot-test-post`. While the row's Editorial status is not exactly `Publish test`, the post is skipped entirely. When set to `Publish test`, a manual **Run workflow** imports it (fixed title, zero images, the same sanitization and blocked-content rules), saves its `post.json` snapshot, and deploys the preview. The preview index then lists both posts; the test page is at `post/vt-0001/pilot-test-post/`. Editing the Doc and running the workflow again tests a correction. The test post emits no RSS or email, and its RSS/email eligibility must stay `Not eligible`. Ring's gates and checks are unchanged. The test post's internal ID `vt-0001` is permanent and independent of its editable title; its folder name follows the date-first convention and stays fixed once publishing starts.
+A clearly labelled test post verifies the new-post path. Its registry row is in the Sheet's New posts tab with Post ID `vt-0001`; its writing Doc is Article inside `Posts/2026-11-22-pilot-test-post`. While the row's Editorial status is not exactly `Publish test`, the post is skipped entirely. When set to `Publish test`, a manual **Run workflow** imports it (fixed identity, the same sanitization and blocked-content rules), saves its snapshot, and deploys. The page lives at `post/vt-0001/pilot-test-post/` but is excluded from the index, post navigation and RSS. Its internal ID `vt-0001` is permanent and independent of its editable title.
+
+## Site tab
+
+The Sheet's Site tab controls preview chrome without code changes: `nav_1`/`nav_2` (top-right links), `rss_enabled`, and `preview_banner` text. The next build picks up changes.
 
 ## Scope and safety
 
-The importer accepts only the configured Sheet, configured Ring Doc, exact archival ID/date/original URL, the gated vt-0001 test post with its fixed identity and folder, and `Publish test` gates. The Sheet stays directly in the approved publishing folder. The Doc may be there during transition or in the exact `Posts/2013-10-14-the-humanitarian-ring` path below it. The importer verifies every folder in that path, rather than allowing arbitrary Drive sources.
+The importer accepts only the configured Sheet, source Docs inside verified `Posts/<date-first folder>` paths, registry rows whose identity (original URL, Tumblr ID, date) matches, and the gated vt-0001 test post. Article HTML is sanitized to a small tag allowlist; embedded images are verified by content; scripts, iframes and forms never pass. Legacy posts keep their original outbound links, including old public links to Google-hosted documents, exactly as published on the original blog.
 
 Google access remains keyless and read-only, using short-lived credentials restricted to this repository, main branch and exact workflow. No long-lived service-account keys, billing, free trial or broader Google access were added.
-
-The build job has repository read access and Google identity-token access. A separate manual-only save_snapshot job has repository contents write access but no Google identity-token permission or source configuration. It receives only the sanitised three-file Ring artifact, checks its fixed identity and file list, and stages only those files plus removal of the superseded root snapshots and ID-first post folder. It rejects stale requests if main changed after the run started. Its repository token does not start another workflow when it commits the snapshot. A separate Pages job deploys only `_site`; no private raw export is uploaded.
-
-All third-party Actions are pinned to verified commits. The repository and preview are visible to anyone. `noindex,nofollow` and robots.txt discourage indexing but are not access controls.
-
-## Offline build from the saved snapshot
-
-After a successful manual publish:
-
-```sh
-cp 1-build.py build.py
-python3 build.py
-```
-
-Open `_site/index.html` or `_site/post/64003052404/the-humanitarian-ring/index.html`. The saved snapshot is a fallback for this local build, not a replacement for the private Google source during manual publishing.
-
-Live blog, DNS, Publii, Mailchimp, redirects, other repositories and other posts remain unchanged. General new-post publishing and live cutover require separate work and approval.
