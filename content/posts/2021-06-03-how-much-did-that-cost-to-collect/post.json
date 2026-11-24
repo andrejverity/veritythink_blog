@@ -11,5 +11,7 @@
   "images": [
     "image-1.png",
     "image-2.png"
-  ]
+  ],
+  "teaser": "A back-of-the-napkin guide to judge whether the data you plan to collect is worth what it costs.",
+  "seo_description": "Guidance for estimating the cost of humanitarian data collection against the value of the decision it supports, with a fictitious worked example."
 }

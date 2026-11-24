@@ -11,5 +11,7 @@
   "images": [
     "image-1.jpg",
     "image-2.png"
-  ]
+  ],
+  "teaser": "Quantum computers could break today's encryption; Mosca's theorem gives a quick test of how urgent the risk is for your data.",
+  "seo_description": "How quantum computing threatens digital security, prompted by reported RSA research, and how Mosca's theorem helps judge the urgency of migrating to quantum-resistant encryption."
 }

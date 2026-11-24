@@ -12,5 +12,7 @@
     "image-1.png",
     "image-2.png",
     "image-3.jpg"
-  ]
+  ],
+  "teaser": "A short paper with Stephanie Tran that separates quantum computing hype from reality for humanitarians, with help from IBM Research.",
+  "seo_description": "Quantum computing and the humanitarian sector: what quantum computing is, qubits, current state and how it may affect humanitarian work."
 }

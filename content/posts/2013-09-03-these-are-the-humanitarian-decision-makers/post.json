@@ -11,5 +11,7 @@
   "images": [
     "image-1.png",
     "image-2.png"
-  ]
+  ],
+  "teaser": "A taxonomy of humanitarian decision makers, mostly built by Quentin Nicaise, with interactive and offline versions.",
+  "seo_description": "A response to the question of who the humanitarian decision makers are, with a taxonomy and credit to contributors."
 }

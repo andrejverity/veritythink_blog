@@ -11,5 +11,7 @@
   "images": [
     "image-1.png",
     "image-2.png"
-  ]
+  ],
+  "teaser": "A composite index of pre-disaster and post-event data offered an alternative to computer models for estimating disaster impact in the Philippines.",
+  "seo_description": "How Miguel's composite index combined datasets such as poverty and population density with storm surge data to estimate disaster impact."
 }
