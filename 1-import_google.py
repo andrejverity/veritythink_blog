@@ -189,10 +189,16 @@ def display_date(date_iso):
     y, m, d = date_iso.split('-')
     return str(int(d)) + ' ' + MONTHS[int(m)-1] + ' ' + y
 
+def editorial_text(value):
+    text = ' '.join(str(value or '').split())
+    if len(text) > 2000 or any(fid in text for fid in FORBIDDEN_IDS) or any(marker in text.lower() for marker in ('docs.google.com', 'drive.google.com', '<script')):
+        raise RuntimeError('Unsafe editorial metadata; keep private source links out of public fields')
+    return text
+
 def import_archive_rows(cfg, token):
     global STAGE
     STAGE = 'redirects registry read'
-    rows = sheet_values(cfg, token, 'Redirects!A1:N200')
+    rows = sheet_values(cfg, token, 'Redirects!A1:P200')
     for row in rows[1:]:
         doc_cell = row[3] if len(row) > 3 else ''
         source_match = DOC_RE.search(doc_cell or '')
@@ -201,7 +207,7 @@ def import_archive_rows(cfg, token):
     imported = []
     seen_folders = set()
     for row in rows[1:]:
-        row = list(row) + [''] * 14
+        row = list(row) + [''] * 16
         original_url, title, date_iso, doc_url, _new_url, status = row[0], row[1], row[2], row[3], row[4], row[5]
         tumblr_id, timestamp_utc = row[9], row[11]
         if status not in PUBLISH_GATES:
@@ -235,7 +241,8 @@ def import_archive_rows(cfg, token):
             (export_dir / 'images' / name).write_bytes(data)
         post = dict(id=tumblr_id, slug=slug, title=title, date=date_iso, display_date=display_date(date_iso),
                     timestamp_utc=timestamp_utc, original_url=original_url, kind='archive',
-                    html=body, images=[n for n, _ in images])
+                    html=body, images=[n for n, _ in images],
+                    teaser=editorial_text(row[14]), seo_description=editorial_text(row[15]))
         (export_dir / 'post.json').write_text(json.dumps(post, ensure_ascii=False, indent=2))
         imported.append((folder, version, hashlib.sha256(raw).hexdigest()))
         print('IMPORTED: ' + folder + ' (' + str(len(images)) + ' images)')
@@ -244,11 +251,11 @@ def import_archive_rows(cfg, token):
 def import_test_post(cfg, token):
     global STAGE
     STAGE = 'new-post registry read'
-    rows = sheet_values(cfg, token, "'New posts'!A1:K50")
+    rows = sheet_values(cfg, token, "'New posts'!A1:M50")
     matches = [r for r in rows[1:] if len(r) > 0 and str(r[0]) == TEST_ID]
     if len(matches) != 1:
         raise RuntimeError('Expected exactly one vt-0001 registry row')
-    row = list(matches[0]) + [''] * 11
+    row = list(matches[0]) + [''] * 13
     if row[9] != 'Not eligible':
         raise RuntimeError('Test post RSS/email eligibility changed; manual review required')
     if row[4] != 'Publish test':
@@ -274,7 +281,8 @@ def import_test_post(cfg, token):
         shutil.rmtree(export_dir)
     export_dir.mkdir(parents=True, exist_ok=True)
     post = dict(id=TEST_ID, slug=TEST_SLUG, title=TEST_TITLE, date=TEST_DATE, display_date=display_date(TEST_DATE),
-                timestamp_utc='', original_url=None, kind='new-test', html=body, images=[])
+                timestamp_utc='', original_url=None, kind='new-test', html=body, images=[],
+                teaser=editorial_text(row[11]), seo_description=editorial_text(row[12]))
     (export_dir / 'post.json').write_text(json.dumps(post, ensure_ascii=False, indent=2))
     print('IMPORTED: gated vt-0001 labelled test post (excluded from index, navigation and feed).')
     return True
