@@ -70,3 +70,11 @@ The Sheet's Site tab controls preview chrome without code changes: `nav_1`/`nav_
 The importer accepts only the configured Sheet, source Docs inside verified `Posts/<date-first folder>` paths, registry rows whose identity (original URL, Tumblr ID, date) matches, and the gated vt-0001 test post. Article HTML is sanitized to a small tag allowlist; embedded images are verified by content; scripts, iframes and forms never pass. Legacy posts keep their original outbound links, including old public links to Google-hosted documents, exactly as published on the original blog.
 
 Google access remains keyless and read-only, using short-lived credentials restricted to this repository, main branch and exact workflow. No long-lived service-account keys, billing, free trial or broader Google access were added.
+
+## Editorial metadata and teasers
+
+Redirects columns O (Teaser) and P (SEO description), and New posts columns L/M with the same names, are optional public-text fields. Teaser is shown in full beneath the archive headline with natural wrapping, no line clamp, substring cut or ellipsis. Blank means no teaser. SEO description overrides Teaser for the description and social metadata; if both are blank, the existing title is used. The workflow reads these fields on the next manual publish or code deployment. Keep private notes and source links out of both fields.
+
+Article pages emit a unique title, description, self-canonical URL, author, original publication date, Open Graph/Twitter text metadata and BlogPosting structured data. No modified date is invented. Preview noindex/nofollow and robots blocking remain unchanged. Canonicals use the preview origin, not the live blog; live URL/indexing/redirect/sitemap checks remain a separate cutover task. Social images and per-image descriptive alt text are not completed by this change.
+
+The reusable Google Doc is an authoring starter, not a publishing trigger. Duplicate it with File > Make a copy, replace placeholders and use native Heading 2/Heading 3, real lists, inline images and descriptive links. Put title/date/tags/status and teaser/SEO description in the registry. General new-post registration/publishing is not implemented yet: the New posts importer still accepts only the fixed labelled vt-0001 test. Existing archive Docs retain their special three-paragraph source headers unchanged.
