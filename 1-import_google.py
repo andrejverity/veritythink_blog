@@ -102,20 +102,21 @@ def output_publish(value):
         with open(target, 'a') as f:
             f.write('publish=' + ('true' if value else 'false') + '\n')
 
-def sanitize(source, title, folder):
+def sanitize(source, title, folder, archive=True):
     tree = Tree()
     tree.feed(source)
     if tree.body is None:
         raise RuntimeError('Missing article body')
     parts = [c for c in tree.body.children if isinstance(c, Node)]
     norm = lambda s: ' '.join(s.split())
-    if len(parts) < 3 or norm(parts[0].text()) != norm(title):
-        raise RuntimeError('Article title header changed; manual review required: ' + folder)
-    if not parts[1].text().strip().startswith('Original post:'):
-        raise RuntimeError('Article date header changed; manual review required: ' + folder)
-    if parts[2].text().strip() != 'Original blog post':
-        raise RuntimeError('Article source-link header changed; manual review required: ' + folder)
-    for n in parts[:3]:
+    if not parts or norm(parts[0].text()) != norm(title):
+        raise RuntimeError('First article paragraph must match the spreadsheet title: ' + folder)
+    if archive:
+        if len(parts) < 3 or not parts[1].text().strip().startswith('Original post:'):
+            raise RuntimeError('Article date header changed; manual review required: ' + folder)
+        if parts[2].text().strip() != 'Original blog post':
+            raise RuntimeError('Article source-link header changed; manual review required: ' + folder)
+    for n in parts[:3] if archive else parts[:1]:
         tree.body.children.remove(n)
     images = []
     allowed = {'p', 'a', 'img', 'strong', 'em', 'b', 'i', 'u', 'br', 'ul', 'ol', 'li', 'h2', 'h3', 'h4', 'blockquote', 'hr'}
@@ -137,7 +138,7 @@ def sanitize(source, title, folder):
             ext = 'jpg' if fmt == 'jpeg' else fmt
             name = 'image-' + str(len(images)+1) + '.' + ext
             images.append((name, raw))
-            return '<img src="images/' + name + '" alt="Illustration ' + str(len(images)) + ' from the original post" loading="lazy"/>'
+            return '<img src="images/' + name + '" alt="' + ('Illustration ' + str(len(images)) + ' from the original post' if archive else 'Article illustration ' + str(len(images))) + '" loading="lazy"/>'
         inner = ''.join(render(c) for c in n.children)
         if n.tag == 'p' and not n.text().strip() and not n.contains_image():
             return ''
@@ -248,78 +249,113 @@ def import_archive_rows(cfg, token):
         print('IMPORTED: ' + folder + ' (' + str(len(images)) + ' images)')
     return imported
 
-def import_test_post(cfg, token):
-    global STAGE
-    STAGE = 'new-post registry read'
-    rows = sheet_values(cfg, token, "'New posts'!A1:M50")
-    matches = [r for r in rows[1:] if len(r) > 0 and str(r[0]) == TEST_ID]
-    if len(matches) != 1:
-        raise RuntimeError('Expected exactly one vt-0001 registry row')
-    row = list(matches[0]) + [''] * 13
-    if row[9] != 'Not eligible':
-        raise RuntimeError('Test post RSS/email eligibility changed; manual review required')
-    if row[4] != 'Publish test':
-        print('SKIP: vt-0001 is not set to Publish test.')
-        return False
-    if row[1].strip() != TEST_TITLE:
-        raise RuntimeError('Test post registry title changed; manual review required')
-    source_match = DOC_RE.search(row[2])
-    if not source_match:
-        raise RuntimeError('Test post source Doc missing; manual review required')
-    doc_id = source_match.group(1)
-    STAGE = 'test post folder access validation'
-    meta = drive_meta(doc_id, token)
-    if meta.get('trashed') or meta.get('mimeType') != 'application/vnd.google-apps.document':
-        raise RuntimeError('Test source is not an active document inside the approved folder')
-    validate_post_folder(cfg, token, meta, TEST_FOLDER)
-    STAGE = 'test document export'
-    raw = api('https://www.googleapis.com/drive/v3/files/' + doc_id + '/export?mimeType=text%2Fhtml', token)
-    STAGE = 'test article sanitization'
-    body, images = sanitize_test(raw.decode('utf-8'))
-    export_dir = POSTS_ROOT / TEST_FOLDER
-    if export_dir.exists():
-        shutil.rmtree(export_dir)
-    export_dir.mkdir(parents=True, exist_ok=True)
-    post = dict(id=TEST_ID, slug=TEST_SLUG, title=TEST_TITLE, date=TEST_DATE, display_date=display_date(TEST_DATE),
-                timestamp_utc='', original_url=None, kind='new-test', html=body, images=[],
-                teaser=editorial_text(row[11]), seo_description=editorial_text(row[12]))
-    (export_dir / 'post.json').write_text(json.dumps(post, ensure_ascii=False, indent=2))
-    print('IMPORTED: gated vt-0001 labelled test post (excluded from index, navigation and feed).')
-    return True
+def validate_new_doc(cfg, token, meta):
+    """Accept a renamed Doc anywhere beneath the existing publishing folder."""
+    seen = set()
+    current = meta
+    for _ in range(12):
+        parents = current.get('parents', [])
+        if cfg['folder_id'] in parents:
+            return
+        if len(parents) != 1 or parents[0] in seen:
+            break
+        seen.add(parents[0])
+        current = drive_meta(parents[0], token)
+        if current.get('trashed') or current.get('mimeType') != 'application/vnd.google-apps.folder':
+            break
+    raise RuntimeError('New article Doc must be inside the publishing folder')
 
-def sanitize_test(source):
-    tree = Tree()
-    tree.feed(source)
-    if tree.body is None:
-        raise RuntimeError('Missing test article body')
-    parts = [c for c in tree.body.children if isinstance(c, Node)]
-    if len(parts) < 1 or parts[0].text().strip() != TEST_TITLE:
-        raise RuntimeError('Test-post title changed; manual review required')
-    tree.body.children.remove(parts[0])
-    images = []
-    allowed = {'p', 'a', 'strong', 'em', 'b', 'i', 'br', 'ul', 'ol', 'li', 'h2', 'h3', 'blockquote'}
-    def render(n):
-        if not isinstance(n, Node):
-            return html.escape(n, quote=False)
-        if n.tag in {'script', 'style', 'iframe', 'object', 'embed', 'form', 'input', 'button', 'img'}:
-            return ''
-        inner = ''.join(render(c) for c in n.children)
-        if n.tag == 'p' and not n.text().strip():
-            return ''
-        if n.tag not in allowed:
-            return inner
-        if n.tag == 'a':
-            href = n.attrs.get('href', '')
-            if href.startswith('https://www.google.com/url?'):
-                href = urllib.parse.parse_qs(urllib.parse.urlparse(href).query).get('q', [href])[0]
-            parsed = urllib.parse.urlparse(href)
-            if parsed.scheme not in {'http', 'https', 'mailto'}:
-                return inner
-            return '<a href="' + html.escape(href, quote=True) + '">' + inner + '</a>'
-        if n.tag == 'br':
-            return '<br/>'
-        return '<' + n.tag + '>' + inner + '</' + n.tag + '>'
-    return ''.join(render(c) for c in tree.body.children), images
+def import_new_rows(cfg, token):
+    global STAGE
+    from datetime import datetime, timezone
+    from zoneinfo import ZoneInfo
+    STAGE = 'new-post registry read'
+    rows = sheet_values(cfg, token, "'New posts'!A1:N1000")
+    for row in rows[1:]:
+        m = DOC_RE.search(str(row[2]) if len(row) > 2 else '')
+        if m:
+            FORBIDDEN_IDS.add(m.group(1))
+    imported = []
+    seen_ids, seen_docs, seen_folders = set(), set(), set()
+    now = datetime.now(timezone.utc)
+    snapshots = [json.loads(p.read_text()) for p in POSTS_ROOT.glob('*/post.json')]
+    for row in rows[1:]:
+        row = list(row) + [''] * 14
+        if not any(str(c).strip() for c in row):
+            continue
+        post_id, title, doc_url, tags, status, requested = [str(c).strip() for c in row[:6]]
+        if status not in {'Publish', 'Published', 'Publish test'}:
+            continue
+        STAGE = 'new-post row validation'
+        test = post_id == TEST_ID
+        if status == 'Publish test' and not test:
+            raise RuntimeError('Publish test is reserved for the labelled pipeline test')
+        if not re.fullmatch(r'vt-[0-9]{4,}', post_id) or post_id in seen_ids:
+            raise RuntimeError('New posts need unique Post IDs, such as vt-0002')
+        seen_ids.add(post_id)
+        m = DOC_RE.search(doc_url)
+        if not m or m.group(1) in seen_docs or not title:
+            raise RuntimeError('New posts need a title and a unique Google Doc link')
+        doc_id = m.group(1)
+        seen_docs.add(doc_id)
+        if test:
+            if title != TEST_TITLE or row[9] != 'Not eligible':
+                raise RuntimeError('Labelled test identity or feed exclusion changed')
+            date_iso, slug, timestamp = TEST_DATE, TEST_SLUG, ''
+        else:
+            slug = str(row[13]).strip()
+            if not re.fullmatch(r'[a-z0-9]+(?:-[a-z0-9]+)*', slug):
+                raise RuntimeError('URL slug is required: lowercase words separated by hyphens')
+            try:
+                when = datetime.fromisoformat(requested)
+                if when.tzinfo is None:
+                    when = when.replace(tzinfo=ZoneInfo('Europe/Amsterdam'))
+            except ValueError:
+                raise RuntimeError('Publish date required: YYYY-MM-DD or YYYY-MM-DD HH:MM in Europe/Amsterdam')
+            date_iso = when.astimezone(ZoneInfo('Europe/Amsterdam')).date().isoformat()
+            timestamp = when.astimezone(timezone.utc).isoformat()
+            if when > now:
+                print('SKIP: future-dated new post ' + post_id + '; run again when due.')
+                continue
+        folder = date_iso + '-' + slug
+        if folder in seen_folders:
+            raise RuntimeError('Duplicate new-post URL')
+        seen_folders.add(folder)
+        old = next((p for p in snapshots if p['id'] == post_id), None)
+        if old and (old['date'] != date_iso or old['slug'] != slug):
+            raise RuntimeError('Published date and slug are permanent; revert the changed URL fields')
+        if any(p['id'] != post_id and p['date'] + '-' + p['slug'] == folder for p in snapshots):
+            raise RuntimeError('New post URL collides with an existing article')
+        existing = POSTS_ROOT / folder / 'post.json'
+        if existing.exists() and json.loads(existing.read_text())['id'] != post_id:
+            raise RuntimeError('New post URL collides with another imported article')
+        STAGE = 'new-post access validation'
+        meta = drive_meta(doc_id, token)
+        if meta.get('trashed') or meta.get('mimeType') != 'application/vnd.google-apps.document':
+            raise RuntimeError('New article source is not an active Google Doc')
+        validate_new_doc(cfg, token, meta)
+        STAGE = 'new-post export and sanitization'
+        raw = api('https://www.googleapis.com/drive/v3/files/' + doc_id + '/export?mimeType=text%2Fhtml', token)
+        body, images = sanitize(raw.decode('utf-8'), title, folder, archive=False)
+        if not body.strip():
+            raise RuntimeError('New article body is empty')
+        eligibility = str(row[9]).strip()
+        if eligibility not in {'RSS', 'Not eligible'}:
+            raise RuntimeError('Choose RSS or Not eligible in the feed column; no email is sent')
+        out = POSTS_ROOT / folder
+        if out.exists():
+            shutil.rmtree(out)
+        (out / 'images').mkdir(parents=True, exist_ok=True)
+        for name, data in images:
+            (out / 'images' / name).write_bytes(data)
+        post = dict(id=post_id, title=title, date=date_iso, slug=slug, display_date=display_date(date_iso),
+                    timestamp_utc=timestamp, original_url=None, kind='new-test' if test else 'new',
+                    html=body, images=[n for n, _ in images], teaser=editorial_text(row[11]),
+                    seo_description=editorial_text(row[12]), rss_eligible=not test and eligibility == 'RSS')
+        (out / 'post.json').write_text(json.dumps(post, ensure_ascii=False, indent=2))
+        imported.append((folder, str(meta.get('version', '')), hashlib.sha256(raw).hexdigest()))
+        print('IMPORTED: new-post ' + post_id + (' (labelled test, excluded)' if test else ''))
+    return imported
 
 def import_site_config(cfg, token):
     global STAGE
@@ -356,15 +392,15 @@ def main():
     if meta.get('trashed') or meta.get('mimeType') != 'application/vnd.google-apps.spreadsheet' or cfg['folder_id'] not in meta.get('parents', []):
         raise RuntimeError('Registry spreadsheet is outside the approved folder')
     imported = import_archive_rows(cfg, token)
-    test_ok = import_test_post(cfg, token)
+    new_imports = import_new_rows(cfg, token)
     import_site_config(cfg, token)
     proof = {'source_mode': 'private-google-readonly',
              'imported_at_utc': __import__('datetime').datetime.now(__import__('datetime').timezone.utc).isoformat(),
-             'posts': {f: {'source_version': v, 'source_sha256': h} for f, v, h in imported},
-             'test_post_imported': test_ok}
+             'posts': {f: {'source_version': v, 'source_sha256': h} for f, v, h in imported + new_imports},
+             'new_posts_imported': len(new_imports)}
     (ROOT / 'source-proof.json').write_text(json.dumps(proof, indent=2))
     print('PASS: ' + str(len(imported)) + ' gated archive post(s) imported. No source IDs exported.')
-    output_publish(bool(imported) or test_ok)
+    output_publish(bool(imported) or bool(new_imports))
 
 if __name__ == '__main__':
     try:
