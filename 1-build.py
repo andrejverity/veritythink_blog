@@ -95,7 +95,7 @@ def load_posts():
     posts = []
     for folder in sorted(p for p in POSTS_ROOT.iterdir() if p.is_dir()):
         post = json.loads((folder / 'post.json').read_text())
-        assert set(post) - {'teaser', 'seo_description'} == {'id', 'slug', 'title', 'date', 'display_date', 'timestamp_utc', 'original_url', 'kind', 'html', 'images'}, folder.name
+        assert set(post) - {'teaser', 'seo_description', 'rss_eligible'} == {'id', 'slug', 'title', 'date', 'display_date', 'timestamp_utc', 'original_url', 'kind', 'html', 'images'}, folder.name
         assert post['date'] + '-' + post['slug'] == folder.name, folder.name + ': folder must stay date-first and match slug'
         low = post['html'].lower()
         for b in BLOCKED:
@@ -171,6 +171,10 @@ def render_article(post, prev_post, next_post, cfg):
         note = ('Pipeline test: this is a labelled test post, not a real article. It stays out of the index, '
                 'post navigation and RSS, and no email distribution is active.')
         edition_left = 'Pipeline test / No. ' + post['id']
+    elif post['kind'] == 'new':
+        kicker = 'Ideas & reflections'
+        note = ''
+        edition_left = 'New writing'
     else:
         kicker = 'From the archive'
         note = ('Migrated from the Tumblr archive. Original wording, links, date and images retained. '
@@ -183,11 +187,11 @@ def render_article(post, prev_post, next_post, cfg):
         nav += '<span></span>'
     if next_post:
         nav += '<a class="next" href="' + canonical(next_post) + '"><span class="dir">Older &rarr;</span>' + esc(next_post['title']) + '</a>'
-    body = (chrome_top(cfg, edition_left, 'Original edition · ' + post['display_date'])
+    body = (chrome_top(cfg, edition_left, ('Original edition · ' if post['kind'] == 'archive' else '') + post['display_date'])
             + '<main><article><div class="kicker">' + kicker + '</div><h1>' + esc(post['title']) + '</h1>'
             + '<div class="byline">Andrej Verity &nbsp; / &nbsp; <time datetime="' + post['date'] + '">' + esc(post['display_date']) + '</time></div>'
             + '<div class="body">' + post['html'] + '</div>'
-            + '<aside class="note">' + note + '</aside>'
+            + ('<aside class="note">' + note + '</aside>' if note else '')
             + '<nav class="postnav">' + nav + '</nav></article></main>'
             + chrome_foot(cfg))
     return page_head(post['title'] + ' | ' + cfg['site_title'], cfg, post=post) + body
@@ -200,7 +204,7 @@ def render_index(archive_posts, cfg):
                     + ('<p class="teaser">' + esc(post['teaser']) + '</p>' if post.get('teaser') else '') + '</div>\n')
     years = str(archive_posts[-1]['date'][:4]) + '–' + str(archive_posts[0]['date'][:4]) if archive_posts else ''
     body = (chrome_top(cfg)
-            + '<main><div class="list"><div class="count">' + str(len(archive_posts)) + ' posts from the archive · ' + years + '</div>'
+            + '<main><div class="list"><div class="count">' + str(len(archive_posts)) + ' posts · ' + years + '</div>'
             + entries + '</div></main>' + chrome_foot(cfg))
     return page_head(cfg['site_title'], cfg, LIST_CSS) + body
 
@@ -229,7 +233,7 @@ def render_feed(archive_posts, cfg):
         content = content.replace(']]>', ']]&gt;')
         items += ('<item><title>' + esc(post['title']) + '</title>'
                   '<link>' + base_abs + canonical(post) + '</link>'
-                  '<guid isPermaLink="true">' + esc(post['original_url']) + '</guid>'
+                  '<guid isPermaLink="true">' + esc(post['original_url'] or base_abs + canonical(post)) + '</guid>'
                   '<pubDate>' + rfc2822(post) + '</pubDate>'
                   '<content:encoded><![CDATA[' + content + ']]></content:encoded></item>\n')
     return ('<?xml version="1.0" encoding="UTF-8"?>\n'
@@ -255,7 +259,7 @@ def build():
         for name in post['images']:
             shutil.copyfile(POSTS_ROOT / (post['date'] + '-' + post['slug']) / 'images' / name, article_dir / 'images' / name)
         (article_dir / 'index.html').write_text(render_article(post, prev_post, next_post, cfg))
-        for stub in (OUT / 'post' / post['id'], OUT / 'post' / post['id'] / post['slug']):
+        for stub in ((OUT / 'post' / post['id'], OUT / 'post' / post['id'] / post['slug']) if post['kind'] == 'archive' else ()):
             stub.mkdir(parents=True, exist_ok=True)
             (stub / 'index.html').write_text(render_redirect(post))
     for post in test:
@@ -264,10 +268,10 @@ def build():
         (article_dir / 'index.html').write_text(render_article(post, None, None, cfg))
     (OUT / 'index.html').write_text(render_index(archive, cfg))
     if cfg['rss_enabled']:
-        (OUT / 'feed.xml').write_text(render_feed(archive, cfg))
+        (OUT / 'feed.xml').write_text(render_feed([p for p in archive if p.get('rss_eligible', True)], cfg))
     (OUT / 'robots.txt').write_text('User-agent: *\nDisallow: /\n')
     manifest = {'posts': [{'folder': p['date'] + '-' + p['slug'], 'post_id': p['id'], 'date': p['date'], 'kind': p['kind']} for p in archive + test],
-                'archive_posts': len(archive), 'rss_emitted': cfg['rss_enabled'],
+                'archive_posts': sum(p['kind'] == 'archive' for p in archive), 'new_posts': sum(p['kind'] == 'new' for p in archive), 'rss_emitted': cfg['rss_enabled'],
                 'image_sha256': {(p['date'] + '-' + p['slug']) + '/' + n: hashlib.sha256((POSTS_ROOT / (p['date'] + '-' + p['slug']) / 'images' / n).read_bytes()).hexdigest()
                                  for p in archive + test for n in p['images']}}
     (OUT / 'build-manifest.json').write_text(json.dumps(manifest, indent=2))
