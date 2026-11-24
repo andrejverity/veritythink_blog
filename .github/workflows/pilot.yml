@@ -123,14 +123,16 @@ jobs:
           for folder, rels in sorted(by_folder.items()):
               assert 'post.json' in rels, 'Missing post.json: ' + folder
               post = json.loads((root/'posts'/folder/'post.json').read_text())
-              assert set(post) - {'teaser','seo_description'} == {'id','slug','title','date','display_date','timestamp_utc','original_url','kind','html','images'}, folder
-              assert post['kind'] in {'archive', 'new-test'}, folder
+              assert set(post) - {'teaser','seo_description','rss_eligible'} == {'id','slug','title','date','display_date','timestamp_utc','original_url','kind','html','images'}, folder
+              assert post['kind'] in {'archive', 'new-test', 'new'}, folder
               assert post['date'] + '-' + post['slug'] == folder, folder + ': folder must stay date-first and match slug'
               if post['original_url'] is not None:
                   assert post['original_url'].startswith('https://blog.veritythink.com/post/'), folder
               for key in ('teaser', 'seo_description'):
                   assert isinstance(post.get(key, ''), str) and len(post.get(key, '')) <= 2000, folder
                   assert not any(b in post.get(key, '').lower() for b in blocked), folder
+              if 'rss_eligible' in post:
+                  assert isinstance(post['rss_eligible'], bool), folder
               low = post['html'].lower()
               for b in blocked:
                   assert b not in low, folder + ': blocked content ' + b
