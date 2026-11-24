@@ -71,7 +71,7 @@ article{margin-top:34px}.body{font-size:18px}.body>p:first-child{font-size:21px}
 LIST_CSS = '''.list{max-width:750px;margin:44px auto 60px}.list a{text-decoration:none;color:var(--ink)}
 .list a:hover h2{color:var(--red)}.list h2{font:normal clamp(24px,4vw,34px)/1.18 Georgia,serif;letter-spacing:-.02em;margin:6px 0 8px}
 .list .when{font:11px system-ui,sans-serif;color:var(--grey);letter-spacing:.1em;text-transform:uppercase}
-.list .entry{border-bottom:1px solid var(--line);padding:24px 0}
+.list .teaser{font:17px/1.6 Georgia,serif;color:var(--grey);margin:10px 0 0;overflow-wrap:break-word;hyphens:none}.list .entry{border-bottom:1px solid var(--line);padding:24px 0}
 .count{font:11px system-ui,sans-serif;color:var(--grey);letter-spacing:.14em;text-transform:uppercase;border-bottom:1px solid var(--line);padding-bottom:14px}'''
 
 def esc(s):
@@ -95,7 +95,7 @@ def load_posts():
     posts = []
     for folder in sorted(p for p in POSTS_ROOT.iterdir() if p.is_dir()):
         post = json.loads((folder / 'post.json').read_text())
-        assert set(post) == {'id', 'slug', 'title', 'date', 'display_date', 'timestamp_utc', 'original_url', 'kind', 'html', 'images'}, folder.name
+        assert set(post) - {'teaser', 'seo_description'} == {'id', 'slug', 'title', 'date', 'display_date', 'timestamp_utc', 'original_url', 'kind', 'html', 'images'}, folder.name
         assert post['date'] + '-' + post['slug'] == folder.name, folder.name + ': folder must stay date-first and match slug'
         low = post['html'].lower()
         for b in BLOCKED:
@@ -108,12 +108,32 @@ def load_posts():
         raise SystemExit('No approved post snapshot present')
     return posts
 
-def page_head(title, cfg, extra_css=''):
+def page_head(title, cfg, extra_css='', post=None):
+    description = (post.get('seo_description') or post.get('teaser') or post['title']) if post else cfg['tagline']
+    url = SITE_URL + (canonical(post) if post and post['kind'] != 'new-test' else BASE + '/post/' + post['id'] + '/' + post['slug'] + '/' if post else BASE + '/')
+    metadata = ('<meta name="description" content="' + esc(description) + '">'
+                '<link rel="canonical" href="' + esc(url) + '">'
+                '<meta property="og:title" content="' + esc(title) + '">'
+                '<meta property="og:description" content="' + esc(description) + '">'
+                '<meta property="og:url" content="' + esc(url) + '">'
+                '<meta property="og:site_name" content="' + esc(cfg['site_title']) + '">'
+                '<meta property="og:type" content="' + ('article' if post else 'website') + '">'
+                '<meta name="twitter:card" content="summary">'
+                '<meta name="twitter:title" content="' + esc(title) + '">'
+                '<meta name="twitter:description" content="' + esc(description) + '">')
+    if post:
+        metadata += ('<meta name="author" content="Andrej Verity">'
+                     '<meta property="article:published_time" content="' + esc(post.get('timestamp_utc') or post['date']) + '">')
+        structured = {'@context':'https://schema.org', '@type':'BlogPosting', 'headline':post['title'],
+                      'description':description, 'datePublished':post.get('timestamp_utc') or post['date'],
+                      'author':{'@type':'Person','name':'Andrej Verity'}, 'url':url,
+                      'mainEntityOfPage':{'@type':'WebPage','@id':url}}
+        metadata += '<script type="application/ld+json">' + json.dumps(structured, ensure_ascii=False).replace('<', '\\u003c') + '</script>'
     return ('<!doctype html><html lang="en"><head><meta charset="utf-8">'
             '<meta name="viewport" content="width=device-width, initial-scale=1">'
             '<meta name="robots" content="noindex,nofollow">'
             '<link rel="alternate" type="application/rss+xml" title="' + esc(cfg['site_title']) + '" href="' + BASE + '/feed.xml">'
-            '<title>' + esc(title) + '</title><style>' + CSS + extra_css + '</style></head><body>')
+            + metadata + '<title>' + esc(title) + '</title><style>' + CSS + extra_css + '</style></head><body>')
 
 def chrome_top(cfg, edition_left='', edition_right=''):
     nav = ''.join('<a href="' + esc(u) + '">' + esc(l) + '</a>' for l, u in nav_items(cfg))
@@ -170,13 +190,14 @@ def render_article(post, prev_post, next_post, cfg):
             + '<aside class="note">' + note + '</aside>'
             + '<nav class="postnav">' + nav + '</nav></article></main>'
             + chrome_foot(cfg))
-    return page_head(post['title'] + ' | ' + cfg['site_title'], cfg) + body
+    return page_head(post['title'] + ' | ' + cfg['site_title'], cfg, post=post) + body
 
 def render_index(archive_posts, cfg):
     entries = ''
     for post in archive_posts:
         entries += ('<div class="entry"><div class="when">' + esc(post['display_date']) + '</div>'
-                    '<a href="' + canonical(post) + '"><h2>' + esc(post['title']) + '</h2></a></div>\n')
+                    '<a href="' + canonical(post) + '"><h2>' + esc(post['title']) + '</h2></a>'
+                    + ('<p class="teaser">' + esc(post['teaser']) + '</p>' if post.get('teaser') else '') + '</div>\n')
     years = str(archive_posts[-1]['date'][:4]) + '–' + str(archive_posts[0]['date'][:4]) if archive_posts else ''
     body = (chrome_top(cfg)
             + '<main><div class="list"><div class="count">' + str(len(archive_posts)) + ' posts from the archive · ' + years + '</div>'
